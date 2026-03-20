@@ -1,0 +1,4 @@
+{
+  "name": "java-engineer",
+  "description": "Java 21 language features, idioms, and coding standards. Covers records, sealed classes, pattern matching, virtual threads, streams, Optional, generics, exception handling, and naming conventions. Pure Java — no framework-specific content."
+}

@@ -1,0 +1,4 @@
+{
+  "name": "redis-engineer",
+  "description": "Redis best practices: data structures, key naming, caching patterns, memory management, transactions, pub/sub, clustering, persistence, and observability."
+}

@@ -1,0 +1,4 @@
+{
+  "name": "sql-engineer",
+  "description": "SQL and database migrations: Flyway/Liquibase, query optimization, indexing strategies, safe schema changes, and raw SQL best practices."
+}

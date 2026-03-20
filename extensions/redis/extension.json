@@ -1,4 +1,0 @@
-{
-  "name": "redis",
-  "description": "Redis patterns: caching strategies, TTL management, and distributed data structures"
-}

@@ -1,4 +1,0 @@
-{
-  "name": "messaging",
-  "description": "Messaging patterns: Kafka and RabbitMQ producer/consumer, DLQ, idempotency, and event-driven architecture"
-}

@@ -1,4 +1,0 @@
-{
-  "name": "sql-database",
-  "description": "SQL and JPA bundle: query optimization, migrations, entity mapping, and database best practices"
-}

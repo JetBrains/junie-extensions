@@ -1,4 +1,0 @@
-{
-  "name": "spring-cloud",
-  "description": "Spring Cloud patterns: gateway, circuit breaker, Feign clients, Config Server, and service discovery"
-}

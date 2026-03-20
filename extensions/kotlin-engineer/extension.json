@@ -1,0 +1,4 @@
+{
+  "name": "kotlin-engineer",
+  "description": "Complete Kotlin development guide: coroutines, Flow, DSL patterns, idiomatic Kotlin, Ktor server, Android Compose, Kotlin Multiplatform, architecture review, performance, and debugging. Self-contained — works with or without Spring Boot."
+}
