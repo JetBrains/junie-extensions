@@ -11,7 +11,7 @@ Write efficient SQL queries and maintainable database migrations.
 
 - Use this skill for raw SQL, indexing, and migration strategy.
 - Verify query advice with `EXPLAIN`/actual plans on the target database; optimizer behavior differs across PostgreSQL, MySQL, Oracle, and others.
-- For ORM-specific issues, prefer `jpa-patterns`.
+- For ORM-specific issues, prefer `spring-boot-engineer` → `references/data.md`.
 
 ## When to Use
 - Writing SQL queries or migrations
