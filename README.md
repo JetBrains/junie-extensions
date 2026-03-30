@@ -4,6 +4,9 @@ Curated extensions for [Junie](https://www.jetbrains.com/junie/) — the AI codi
 
 Extensions give Junie domain expertise: best practices, code patterns, anti-patterns, and checklists for specific technologies. Each extension can include skills (knowledge files), agents, guidelines, and MCP servers (tools).
 
+> [!IMPORTANT]
+> **Make sure you trust an extension before installing, updating, or using it.** JetBrains does not control what MCP servers, files, or other software are included in extensions and cannot verify that they will work as intended or that they won't change. Always review the extension's contents and source code before use.
+
 ## Structure
 
 Each extension lives in `extensions/<name>/` and may contain:
