@@ -1,6 +1,6 @@
 # Junie Extensions
 
-Curated extensions for [Junie](https://www.jetbrains.com/junie/) — the AI coding agent by JetBrains.
+Curated extensions for [Junie](https://junie.jetbrains.com/) — the AI coding agent by JetBrains.
 
 Extensions give Junie domain expertise: best practices, code patterns, anti-patterns, and checklists for specific technologies. Each extension can include skills (knowledge files), agents, guidelines, and MCP servers (tools).
 
