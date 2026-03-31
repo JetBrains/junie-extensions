@@ -13,7 +13,7 @@
     {
       "name": "context7",
       "source": "./extensions/context7",
-      "description": "Up-to-date library and framework documentation via Context7 MCP and repository knowledge via DeepWiki MCP.",
+      "description": "Up-to-date library and framework documentation via Context7 MCP",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -23,8 +23,7 @@
       "keywords": [
         "documentation",
         "mcp",
-        "context7",
-        "deepwiki"
+        "context7"
       ]
     },
     {

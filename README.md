@@ -47,7 +47,3 @@ description: "One-line description."
 ```
 
 Reference files are loaded on-demand based on context — only the relevant ones are read for each task.
-
-## License
-
-Copyright JetBrains s.r.o. All rights reserved.
