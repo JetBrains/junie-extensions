@@ -1,16 +1,14 @@
 {
   "mcpServers": {
     "DBHub": {
-      "command": "docker",
+      "command": "npx",
       "args": [
-        "run",
-        "-i",
-        "--rm",
-        "bytebase/dbhub:latest",
+        "-y",
+        "@bytebase/dbhub@latest",
         "--transport",
         "stdio",
         "--dsn",
-        "DB_RUL"
+        "DB_URL"
       ]
     }
   }
