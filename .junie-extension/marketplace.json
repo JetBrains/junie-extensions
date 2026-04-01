@@ -19,7 +19,7 @@
         "name": "JetBrains"
       },
       "category": "documentation",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/context7",
       "keywords": [
         "documentation",
         "mcp",
@@ -35,7 +35,7 @@
         "name": "JetBrains"
       },
       "category": "language",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/java-engineer",
       "keywords": [
         "java",
         "java21",
@@ -52,7 +52,7 @@
         "name": "JetBrains"
       },
       "category": "language",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/kotlin-engineer",
       "keywords": [
         "kotlin",
         "coroutines",
@@ -71,7 +71,7 @@
         "name": "JetBrains"
       },
       "category": "database",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/redis-engineer",
       "keywords": [
         "redis",
         "cache",
@@ -88,7 +88,7 @@
         "name": "JetBrains"
       },
       "category": "framework",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/spring-boot-engineer",
       "keywords": [
         "spring-boot",
         "java",
@@ -107,7 +107,7 @@
         "name": "JetBrains"
       },
       "category": "database",
-      "homepage": "https://www.jetbrains.com/junie/",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/sql-engineer",
       "keywords": [
         "sql",
         "database",
