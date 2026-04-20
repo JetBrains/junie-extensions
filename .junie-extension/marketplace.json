@@ -11,6 +11,43 @@
   },
   "extensions": [
     {
+      "name": "php-engineer",
+      "source": "./extensions/php-engineer",
+      "description": "Modern PHP 8.x guide: type system, enums, fibers, match expressions, readonly properties, PSR standards, and Composer. Pure PHP — no framework-specific content.",
+      "version": "1.0.0",
+      "author": {
+        "name": "JetBrains"
+      },
+      "category": "language",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/php-engineer",
+      "keywords": [
+        "php",
+        "php8",
+        "psr",
+        "composer",
+        "static-analysis"
+      ]
+    },
+    {
+      "name": "laravel-engineer",
+      "source": "./extensions/laravel-engineer",
+      "description": "Complete Laravel guide: Eloquent ORM, routing, Form Requests, API Resources, authentication, queues, events, testing with Pest/PHPUnit, and Spatie coding standards. Includes toolchain setup and post-generation quality pipeline.",
+      "version": "1.0.0",
+      "author": {
+        "name": "JetBrains"
+      },
+      "category": "framework",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/laravel-engineer",
+      "keywords": [
+        "laravel",
+        "php",
+        "eloquent",
+        "pest",
+        "sanctum",
+        "queues"
+      ]
+    },
+    {
       "name": "context7",
       "source": "./extensions/context7",
       "description": "Up-to-date library and framework documentation via Context7 MCP",

@@ -1,0 +1,4 @@
+{
+  "name": "laravel-engineer",
+  "description": "Complete Laravel guide: Eloquent ORM, routing, Form Requests, API Resources, authentication, queues, events, testing with Pest/PHPUnit, and Spatie coding standards. Includes toolchain setup and post-generation quality pipeline."
+}
