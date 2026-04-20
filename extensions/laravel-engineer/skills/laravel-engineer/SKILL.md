@@ -21,9 +21,8 @@ description: Use when working on Laravel projects. Covers architecture patterns,
 Read `composer.json`. Look for `laravel/boost` in `require` or `require-dev`.
 
 - Found → continue to Step 2
-- Not found → **stop and tell the user:**
+- Not found → **install installing:**
   ```
-  Laravel Boost is not installed. Run:
   composer require --dev laravel/boost
   ```
 
@@ -32,9 +31,8 @@ Read `composer.json`. Look for `laravel/boost` in `require` or `require-dev`.
 Read `boost.json` in the project root. Check that `"guidelines": true` is present.
 
 - `boost.json` exists and `"guidelines": true` → proceed with the task
-- `boost.json` missing or `"guidelines"` is not `true` → **stop and tell the user:**
+- `boost.json` missing or `"guidelines"` is not `true` → **suggeest installing:**
   ```
-  Laravel Boost is installed but not configured. Run:
   php artisan boost:install
   ```
 
