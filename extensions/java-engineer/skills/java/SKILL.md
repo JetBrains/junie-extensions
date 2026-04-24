@@ -11,7 +11,7 @@ Baseline knowledge of the Java language (records, sealed, pattern matching, text
 
 Before writing non-trivial code, verify:
 
-1. **JDK version** — `java --version`, and target version in `pom.xml` (`<maven.compiler.release>`) or `build.gradle(.kts)` (`java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }`). Adjust feature use if < 17.
+1. **JDK version** — `java --version`, and target version in `pom.xml` (`<maven.compiler.release>`) or `build.gradle(.kts)` (`java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }`). Adjust feature use if < 17. Current LTS: Java 21; Java 25 is the next LTS (2025). Prefer LTS releases for new projects.
 2. **Build tool wrapper** — use `./mvnw` / `./gradlew`, never a globally installed `mvn` / `gradle`.
 3. **Lombok** — look for `lombok` in dependencies. If present, prefer `@RequiredArgsConstructor` / `@Slf4j` / `@Builder`; if absent, do not introduce Lombok unless asked.
 4. **Static analysis** — `error-prone`, `checkstyle`, `spotbugs`, `pmd`. Respect existing rules; do not add new violations.

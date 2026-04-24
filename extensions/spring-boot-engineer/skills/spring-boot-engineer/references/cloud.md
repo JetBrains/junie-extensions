@@ -32,7 +32,8 @@ Generic knowledge of Spring Cloud Config, Service Discovery (Eureka / Consul), S
 
 ## Correlation & tracing
 
-- Use **Micrometer Tracing** (Spring Boot 3.x standard). Spring Cloud Sleuth is retired. It wires across MVC, WebFlux, RestClient, WebClient, Kafka, R2DBC automatically.
+- Use **Micrometer Tracing** (Boot 3.x+) or the new **`spring-boot-starter-opentelemetry`** (Boot 4.x). Spring Cloud Sleuth is retired — do not use. Micrometer Tracing wires across MVC, WebFlux, RestClient, WebClient, Kafka, R2DBC automatically.
+- In Boot 4 with the OpenTelemetry starter, tracing is exported via OTLP automatically; no Sleuth or manual bridge needed.
 - For log correlation in MDC, pattern: `%X{traceId:-},%X{spanId:-}`. Ensure context propagation works across reactive / async boundaries (see `reactive.md`).
 
 ## When to use Spring Cloud at all
@@ -43,7 +44,7 @@ Generic knowledge of Spring Cloud Config, Service Discovery (Eureka / Consul), S
 
 ## Common mistakes
 
-- `bootstrap.yml` still present in Spring Boot 3 project → silently ignored, config never loads.
+- `bootstrap.yml` still present in a Spring Boot 3/4 project → silently ignored (legacy bootstrap context removed since Boot 2.4), config never loads.
 - `@RefreshScope` on `DataSource` / `EntityManagerFactory` / `TaskExecutor` — refresh either does nothing or corrupts state.
 - Running Gateway with `spring-boot-starter-web` (MVC) — it starts on Netty but MVC autoconfig leaks, causing hangs.
 - Hard-coding `http://localhost:8761/eureka/` in production — use service-specific profiles or environment variables.

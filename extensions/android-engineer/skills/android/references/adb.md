@@ -63,7 +63,7 @@ adb shell settings put global airplane_mode_on 1 && \
   adb shell am broadcast -a android.intent.action.AIRPLANE_MODE
 adb shell "cmd uimode night yes"                     # dark mode
 adb shell settings put system user_rotation 1        # landscape (0/1/2/3)
-adb shell am send-trim-memory com.example.app MODERATE
+adb shell am send-trim-memory com.example.app MODERATE  # requires app's android:debuggable="true" OR `adb root`; otherwise silently ignored. Verify via `adb logcat -d | grep onTrimMemory`.
 ```
 
 ## Files

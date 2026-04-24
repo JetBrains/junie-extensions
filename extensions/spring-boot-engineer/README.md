@@ -1,6 +1,6 @@
 # spring-boot-engineer
 
-Spring Boot 3.x expert for Java and Kotlin. Turns Junie into a senior Spring engineer that writes idiomatic code **and** catches the production pitfalls most tutorials skip.
+Spring Boot 4.x expert for Java and Kotlin (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3). Turns Junie into a senior Spring engineer that writes idiomatic code **and** catches the production pitfalls most tutorials skip. Covers the Boot 3.x → 4.x migration traps too.
 
 ## Philosophy
 
@@ -10,7 +10,7 @@ This extension is intentionally thin. Spring Boot's happy path (`@RestController
 
 - **Web layer** — DTO boundary rules, `ProblemDetail` error model, pagination, `RestClient` / `WebClient` choice, CORS with Spring Security.
 - **Data access** — N+1 diagnosis, `spring.jpa.open-in-view=false`, `@Transactional` proxy rules, fetch-join + pagination (`HHH90003004`), HikariCP tuning.
-- **Security** — Spring Security 6 filter chain, CSRF policy for cookie vs stateless, OAuth2 resource server + JWT, method security, `/actuator/*` hardening.
+- **Security** — Spring Security 7 filter chain (`authorizeHttpRequests`, no `and()`, `requestMatchers`), CSRF policy for cookie vs stateless, OAuth2 resource server + JWT, method security, `/actuator/*` hardening.
 - **Testing** — test slices (`@WebMvcTest`, `@DataJpaTest`, `@RestClientTest`), `@MockitoBean` replacing deprecated `@MockBean`, Testcontainers with `@ServiceConnection`.
 - **Migrations** — Flyway / Liquibase, expand-contract rename/drop, `CREATE INDEX CONCURRENTLY`, baseline-on-migrate for legacy DBs.
 - **Scheduling & observability** — `@Scheduled` in a clustered deployment (ShedLock), health probes done right, Micrometer cardinality, virtual threads trade-offs.
@@ -40,6 +40,7 @@ Add this extension to Junie via your configuration settings. The `SKILL.md` hub 
 
 ## Requirements
 
-- Spring Boot 3.x project (`spring-boot-starter-parent` in Maven, or `org.springframework.boot` Gradle plugin).
-- Java 17+ (Spring Boot 3 requirement); Java 21 recommended for records + pattern matching.
+- Spring Boot 3.x or 4.x project (`spring-boot-starter-parent` in Maven, or `org.springframework.boot` Gradle plugin). Boot 4.x is the primary target; Boot 3.x is still covered.
+- Java 17+ (Boot 4 minimum); Java 21 recommended (virtual threads, records, pattern matching).
+- Boot 4.x brings: Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3 (`tools.jackson.*` package rename), `@MockBean`/`@SpyBean` removed (use `@MockitoBean`/`@SpyBean` from `org.springframework.test.context.bean.override.mockito`), Undertow starter dropped.
 - For Kotlin projects using Spring / JPA: `kotlin-spring` and `kotlin-jpa` compiler plugins.

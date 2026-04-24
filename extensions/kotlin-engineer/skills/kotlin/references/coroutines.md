@@ -25,7 +25,7 @@ Assumes you know `suspend`, `launch` / `async`, `Flow` / `StateFlow` / `SharedFl
 ## Dispatcher discipline
 
 - `Dispatchers.Main` — UI callbacks only.
-- `Dispatchers.IO` — blocking I/O (JDBC, `File`, `Socket`). Pool is ~64 threads by default, tune with `kotlinx.coroutines.io.parallelism` if you know you need more.
+- `Dispatchers.IO` — blocking I/O (JDBC, `File`, `Socket`). Pool size is `max(64, availableProcessors)` by default (so on a 128-core box it's 128, not 64); tune with `kotlinx.coroutines.io.parallelism` if you know you need more.
 - `Dispatchers.Default` — CPU work. Sized = number of cores.
 - `Dispatchers.Unconfined` — advanced use only; resumes on whatever thread completed the suspension point. Don't sprinkle it.
 - **Inject dispatchers** for testing: `class Repo(private val io: CoroutineDispatcher = Dispatchers.IO)`. Makes `runTest` + `StandardTestDispatcher` actually usable.

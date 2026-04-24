@@ -19,7 +19,7 @@ Generic REST / Spring MVC knowledge (`@RestController`, `@GetMapping`, `@PathVar
 - Use `ProblemDetail` (RFC 7807) — built-in since Spring 6. Do not hand-roll `ErrorResponse` records.
 - One `@RestControllerAdvice` with handlers for: `MethodArgumentNotValidException` (400 + field errors), domain `NotFoundException` (404), `DataIntegrityViolationException` (409), fallback `Exception` (500, log full stack, return generic message).
 - Never leak stack traces or SQL fragments to clients.
-- Spring Boot 3.2+: set `spring.mvc.problemdetails.enabled=true` to let Spring produce `ProblemDetail` for framework exceptions automatically.
+- Set `spring.mvc.problemdetails.enabled=true` to let Spring produce `ProblemDetail` for framework exceptions automatically.
 
 ## Pagination
 
@@ -29,9 +29,26 @@ Generic REST / Spring MVC knowledge (`@RestController`, `@GetMapping`, `@PathVar
 
 ## Outbound HTTP
 
-- For new code use `RestClient` (Spring 6.1+, synchronous, fluent) or declarative `@HttpExchange` interfaces. `RestTemplate` is in maintenance — avoid in green-field code.
+- Use `RestClient` (synchronous, fluent) or declarative `@HttpExchange` interfaces. `RestTemplate` auto-configuration is **opt-in only in Boot 4** — it is no longer auto-configured by default. Avoid `RestTemplate` in new code.
 - Use `WebClient` only in WebFlux apps (or when you actually need reactive / streaming). Inside MVC it works but adds complexity for no benefit.
 - Always set a timeout. Default `RestClient` / `WebClient` have **no read timeout** — requests can hang forever.
+
+## API versioning (Spring Boot 4.x)
+
+Spring Boot 4 adds first-class API versioning via a `version` attribute on mapping annotations:
+
+```java
+@GetMapping(value = "/{id}", version = "1.0")
+public UserResponseV1 getV1(@PathVariable Long id) { ... }
+
+@GetMapping(value = "/{id}", version = "2.0+")
+public UserResponseV2 getV2(@PathVariable Long id) { ... }
+```
+
+- `"1.2"` — exact version match; `"1.2+"` — matches 1.2 and above.
+- Configure via `spring.mvc.apiversion.*` (MVC) or `spring.webflux.apiversion.*` (WebFlux).
+- Version is resolved from the request (header, query param, or path — configurable).
+- Use when the project has explicit API versioning requirements; skip for internal services.
 
 ## CORS
 

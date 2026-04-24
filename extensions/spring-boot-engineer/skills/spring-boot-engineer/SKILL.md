@@ -1,6 +1,6 @@
 ---
 name: spring-boot-engineer
-description: Use when building, modifying, or reviewing Spring Boot 3.x applications in Java or Kotlin — REST controllers, Spring Data JPA repositories, Spring Security 6 (OAuth2 / JWT), WebFlux reactive endpoints, Kafka / event-driven code, Resilience4j, Spring Cloud, or Spring Boot tests. Covers common pitfalls that break in production: `@Transactional` self-invocation, N+1 queries, Kotlin + JPA plugins, blocking calls inside WebFlux.
+description: Use when building, modifying, or reviewing Spring Boot 4.x applications (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) in Java or Kotlin — REST controllers, Spring Data JPA repositories, OAuth2 / JWT, WebFlux reactive endpoints, Kafka / event-driven code, Resilience4j, Spring Cloud, or Spring Boot tests. Covers common pitfalls that break in production: `@Transactional` self-invocation, N+1 queries, Kotlin + JPA plugins, blocking calls inside WebFlux. Migrating from Boot 3.x? See Setup Check — major breaking changes: Jackson 3 package rename, `@MockBean` removed, `and()` in Security DSL removed, Undertow dropped.
 ---
 
 # Spring Boot Engineer
@@ -48,9 +48,17 @@ plugins {
 
 Also confirm `kotlin-reflect` is on the classpath (included by `spring-boot-starter`).
 
-### Step 3 — Java version
+### Step 3 — Java version & runtime
 
-Spring Boot 3.x requires **Java 17+**. Check `<java.version>` (Maven) or `java.toolchain` / `sourceCompatibility` (Gradle). Spring Boot 3.2+ supports virtual threads (enable via `spring.threads.virtual.enabled=true`); don't recommend them unconditionally — they're harmful with `synchronized` blocks and thread-local-based libraries.
+Spring Boot 4.x requires **Java 17+** (Java 21+ recommended — first-class virtual thread support). Check `<java.version>` (Maven) or `java.toolchain` / `sourceCompatibility` (Gradle).
+
+Virtual threads: enable via `spring.threads.virtual.enabled=true`. Don't use them unconditionally — harmful with `synchronized` blocks and `ThreadLocal`-heavy libraries.
+
+**Undertow is no longer supported** in Boot 4 (dropped Servlet 6.1 compatibility). Use Tomcat (default) or Jetty.
+
+### Step 4 — Jackson version
+
+Spring Boot 4 defaults to **Jackson 3**. The package was renamed: `com.fasterxml.jackson` → `tools.jackson`. Any code importing Jackson classes directly will break. A `jackson-databind-compat` bridge module exists for gradual migration, but plan to update imports. If the project already uses Jackson 3 → proceed. If still on Jackson 2 → flag the migration before adding new Jackson-dependent code.
 
 ## Reference Guide
 
@@ -60,7 +68,7 @@ Load on demand — don't read all of these upfront.
 |-------|-----------|-----------|
 | Web Layer | `references/web.md` | Controllers, DTO boundary, validation, `ProblemDetail`, pagination, CORS, deprecations |
 | Data Access | `references/data.md` | JPA / Hibernate pitfalls: N+1, `open-in-view`, `@Transactional` self-invocation, fetch-join + pagination, Hikari tuning |
-| Security | `references/security.md` | Spring Security 6 `SecurityFilterChain`, CSRF rules, JWT resource server, method security, `/actuator/*` hardening |
+| Security | `references/security.md` | Spring Security 7 `SecurityFilterChain`, CSRF rules, JWT resource server, method security, `/actuator/*` hardening |
 | Testing | `references/testing.md` | Test slices (`@WebMvcTest` / `@DataJpaTest` / `@RestClientTest`), `@MockitoBean` migration, Testcontainers + `@ServiceConnection` |
 | Migrations | `references/migrations.md` | Flyway / Liquibase, zero-downtime schema change (expand-contract), baseline-on-migrate, `CREATE INDEX CONCURRENTLY` |
 | Scheduling & Observability | `references/scheduling-observability.md` | `@Scheduled` in a cluster (ShedLock), Actuator exposure, health probes, Micrometer cardinality, virtual threads trade-offs |
@@ -107,7 +115,15 @@ Load on demand — don't read all of these upfront.
 - Mixing blocking and reactive code: no `.block()` / `.toFuture().get()` inside a `Mono` / `Flux` chain; no blocking JDBC inside a WebFlux controller. Wrap unavoidable blocking calls with `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())`.
 - Storing secrets, connection strings or tokens in `application.properties` / `application.yml` committed to git.
 - Hardcoding URLs / environment-specific values — use profiles (`application-dev.yml`, `application-prod.yml`) and env vars.
-- Deprecated Spring Boot 2.x APIs: `WebSecurityConfigurerAdapter`, `antMatchers(...)` (use `requestMatchers(...)`), `WebMvcConfigurerAdapter`.
+- Removed Boot 3.x deprecated APIs — all of these are gone in Boot 4 and will fail to compile:
+  - `WebSecurityConfigurerAdapter` (use `SecurityFilterChain` bean)
+  - `antMatchers(...)` (use `requestMatchers(...)`)
+  - `WebMvcConfigurerAdapter` (implement `WebMvcConfigurer`)
+  - `and()` in `HttpSecurity` DSL (use separate lambda calls)
+  - `@MockBean` / `@SpyBean` (use `@MockitoBean` / `@MockitoSpyBean`)
+  - `authorizeRequests()` (use `authorizeHttpRequests()`)
+- **Jackson 3 imports**: `com.fasterxml.jackson.*` → `tools.jackson.*`. Don't write new code against Jackson 2 packages on a Boot 4 project.
+- Undertow embedded server — not supported. Don't add `spring-boot-starter-undertow`.
 - Returning or accepting JPA entities at the controller layer — leaks persistence details, causes lazy-loading blowups (`could not initialize proxy — no Session`), breaks API contracts on entity refactors.
 - N+1 queries: `repository.findAll()` followed by accessing `@OneToMany` lazy associations in a loop. Use `@EntityGraph`, `JOIN FETCH`, or projections. See `references/data.md`.
 - `spring.jpa.open-in-view=true` in production (the Spring Boot default!). Explicitly set it to `false` — OSIV hides lazy-loading bugs and holds the DB connection for the entire HTTP request.

@@ -61,9 +61,17 @@ Default exposure (since Spring Boot 2+): only `/actuator/health` and `/actuator/
 - `@Timed` on a service method = Micrometer timer. Useful, but prefer wiring timers explicitly for custom metrics.
 - Include `http.server.requests` (auto-instrumented). Alert on `p99` > budget, `5xx` rate, saturation (thread pool queue size).
 
-## Virtual threads (Spring Boot 3.2+)
+## OpenTelemetry (Spring Boot 4.x)
 
-- Enable with `spring.threads.virtual.enabled=true`. Spring Boot rewires Tomcat / Jetty to use virtual threads for request handling.
+Spring Boot 4 ships a dedicated starter: `spring-boot-starter-opentelemetry`. It brings OTLP metrics and trace export out of the box without manual Micrometer OTLP bridge wiring.
+
+- Use when the stack uses an OpenTelemetry Collector (common in k8s / CNCF environments).
+- For Prometheus-only setups `micrometer-registry-prometheus` is still the simpler choice.
+- Both can coexist, but configure one exporter per signal type to avoid duplicate data.
+
+## Virtual threads
+
+- Enable with `spring.threads.virtual.enabled=true`. Spring Boot rewires Tomcat / Jetty to use virtual threads for request handling. (Available since Boot 3.2; recommended in Boot 4.x for I/O-heavy MVC apps.)
 - **Helpful for**: blocking I/O-heavy apps (lots of DB / HTTP calls per request) where you'd otherwise need a huge thread pool.
 - **Harmful for / doesn't help**:
   - CPU-bound workloads (virtual threads pin a carrier thread — no benefit vs platform threads).

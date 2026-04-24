@@ -21,7 +21,7 @@ Look for:
 - **Function on column**: `WHERE LOWER(email) = ?` → can't use `idx(email)`. Fix: functional index `CREATE INDEX ON users (LOWER(email))`, or store lowercased column.
 - **Implicit type cast**: `WHERE id = '123'` when `id` is INT (MySQL tolerates; Postgres warns). Disables the index. Match types.
 - **Leading wildcard LIKE**: `LIKE '%foo'` → no B-tree usage. Use trigram / full-text index (Postgres: `pg_trgm`; MySQL: `FULLTEXT`).
-- **OR across columns**: `WHERE a = 1 OR b = 2` can't use indexes on both. Use `UNION ALL` of two equality lookups.
+- **OR across columns**: `WHERE a = 1 OR b = 2` can't use indexes on both. Use `UNION ALL` of two equality lookups — **but** if a row can satisfy both predicates you'll get duplicates; either ensure predicates are mutually exclusive (e.g. add `AND NOT (a = 1)` to the second branch), or use `UNION` (which dedups but costs a sort/hash).
 - **Negation**: `WHERE status != 'done'` → usually seq-scan unless `status` has few values and the DB uses a bitmap scan.
 - **Low selectivity**: index on `is_active` when 95% of rows are active → planner ignores the index. Use a **partial index** keyed on the minority case: `CREATE INDEX idx ON orders(created_at) WHERE status = 'PENDING'`.
 - **Correlated subquery with `IN` vs `EXISTS`**: usually the same on modern optimizers, but `EXISTS` is safer for nullable columns (see MUST NOT).

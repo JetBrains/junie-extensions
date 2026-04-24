@@ -8,8 +8,10 @@ Assumes basic Gradle knowledge. This file is the setup policy and the compiler-p
 - **Version catalogs (`gradle/libs.versions.toml`)** for dependency versions. Don't hard-code versions in module scripts.
   ```toml
   [versions]
-  kotlin = "2.0.21"
-  coroutines = "1.10.0"
+  # Check latest stable at: https://kotlinlang.org/docs/releases.html
+  kotlin = "<latest-stable>"
+  # Check latest stable at: https://github.com/Kotlin/kotlinx.coroutines/releases
+  coroutines = "<latest-stable>"
   [libraries]
   coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
   [plugins]

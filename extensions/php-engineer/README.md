@@ -27,7 +27,7 @@ Baseline PHP 8.x knowledge (enums, readonly, match, nullsafe, union/intersection
 
 ## Requirements
 
-- PHP 8.2+ (`"php": ">=8.2"` in `composer.json`).
+- PHP 8.3+ (`"php": ">=8.3"` in `composer.json`). PHP 8.2 is security-only.
 - `declare(strict_types=1);` in every file — non-negotiable.
 - `vendor/bin/phpstan` at level 8+ recommended (`composer require --dev phpstan/phpstan`).
 - Formatter: `pint` / `php-cs-fixer` / `phpcs` — the agent respects whatever is already configured.

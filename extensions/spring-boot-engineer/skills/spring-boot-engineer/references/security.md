@@ -1,13 +1,28 @@
 # Security — policy & pitfalls
 
-Generic Spring Security 6 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, `UserDetailsService`, `BCryptPasswordEncoder`) is assumed. This file covers the decisions that actually matter.
+Generic Spring Security 7 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, `UserDetailsService`, `BCryptPasswordEncoder`) is assumed. This file covers the decisions that actually matter.
 
-## Minimal filter chain (Spring Security 6 / Spring Boot 3.x)
+> **Spring Boot 4 / Security 7 breaking changes:**
+> - `and()` method **removed** from `HttpSecurity` DSL — use separate lambda calls: `.csrf(csrf -> ...)` instead of `.csrf().disable().and()...`
+> - `authorizeRequests()` **removed** — use `authorizeHttpRequests()`
+> - `WebSecurityConfigurerAdapter` **removed** — use `@Bean SecurityFilterChain`
 
-- Exactly one `@Bean SecurityFilterChain`. No `WebSecurityConfigurerAdapter` — it's removed in Spring Security 6.
+## Minimal filter chain (Spring Security 7 / Spring Boot 4.x)
+
+- Exactly one `@Bean SecurityFilterChain`. No `WebSecurityConfigurerAdapter` — removed.
 - Explicit `authorizeHttpRequests { … }` — no `permitAll()` at the end by default. Default deny.
 - Explicit choice between stateless (`SessionCreationPolicy.STATELESS`, JWT / resource server) and stateful (default, session cookie, CSRF on).
-- `requestMatchers(...)` — never `antMatchers(...)` (removed).
+- `requestMatchers(...)` — `antMatchers(...)` removed.
+- **No `and()` in DSL** — chain methods as separate lambdas:
+  ```java
+  // ❌ Boot 3 style — and() removed
+  http.csrf().disable().and().authorizeHttpRequests(...)
+  
+  // ✅ Boot 4 style
+  http
+      .csrf(csrf -> csrf.disable())
+      .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+  ```
 
 ## CSRF
 
@@ -30,7 +45,7 @@ Generic Spring Security 6 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, 
 
 ## Method security
 
-- Enable with `@EnableMethodSecurity` (the `prePostEnabled = true` default is correct in Spring Security 6). `@EnableGlobalMethodSecurity` is deprecated.
+- Enable with `@EnableMethodSecurity` (the `prePostEnabled = true` default is correct in Spring Security 7). `@EnableGlobalMethodSecurity` is removed in Spring Security 7.
 - `@PreAuthorize("hasRole('ADMIN')")` on service layer, not controllers — protects the method regardless of how it's called.
 - SpEL: `@PreAuthorize("#userId == authentication.principal.id")` for resource-owner checks.
 - Method security uses proxies — same rules as `@Transactional`: public non-final, no self-invocation.
@@ -50,7 +65,7 @@ Generic Spring Security 6 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, 
 ## SPA + CSRF (cookie-based session)
 
 - Default `CookieCsrfTokenRepository.withHttpOnlyFalse()` lets the JS SPA read the `XSRF-TOKEN` cookie and echo it back as `X-XSRF-TOKEN`. Needed for React/Vue/Angular clients.
-- Since Spring Security 6, the default is deferred CSRF resolution — use `CsrfTokenRequestAttributeHandler` + setting its `csrfRequestAttributeName = null` if your SPA calls GETs that need the cookie primed. Otherwise the token isn't materialized until the first unsafe request.
+- Since Spring Security 5.8 (still the default in 6/7), CSRF resolution is deferred — use `CsrfTokenRequestAttributeHandler` + setting its `csrfRequestAttributeName = null` if your SPA calls GETs that need the cookie primed. Otherwise the token isn't materialized until the first unsafe request.
 
 ## Common mistakes
 

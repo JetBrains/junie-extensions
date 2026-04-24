@@ -55,6 +55,7 @@ Detection: enable `spring.jpa.properties.hibernate.generate_statistics=true` + `
 
 - `equals` / `hashCode` based on `id` is unsafe before `persist()` (id is null). For JPA entities prefer a business key, or use `Objects.hash(getClass())` + id-aware equals that handles null.
 - `@GeneratedValue(strategy = GenerationType.IDENTITY)` disables Hibernate's JDBC batch inserts. For bulk inserts use `SEQUENCE` + `hibernate.jdbc.batch_size=50` + `hibernate.order_inserts=true` / `order_updates=true`.
+- **Hibernate 7 (Boot 4)**: `hibernate-jpamodelgen` annotation processor replaced by `hibernate-processor`. Update your `pom.xml` / `build.gradle.kts` accordingly; the old artifact produces compile errors.
 - Bidirectional `@OneToMany` + `@ManyToOne`: manage both sides in helper methods (`addOrder(order) { orders.add(order); order.setUser(this); }`). Forgetting one side → dangling FKs on flush.
 - Kotlin entities require `kotlin-jpa` plugin (generates no-arg constructor). Without it: `InstantiationException: No default constructor for entity`.
 
@@ -67,7 +68,7 @@ Detection: enable `spring.jpa.properties.hibernate.generate_statistics=true` + `
 
 ## Connection pool (HikariCP defaults rarely fit prod)
 
-- Default `maximum-pool-size=10`. Size it as `pool = ((core_count * 2) + effective_spindle_count)` — usually 10–30 per instance, **not** "more is better" (DB connection count is expensive).
+- Default `maximum-pool-size=10`. The classic `pool = ((core_count * 2) + effective_spindle_count)` is a **DB-side capacity ceiling** (Brecht / PgBouncer guidance for how many concurrent connections the database can serve efficiently), **not** a prescription for the app pool size. Per app-instance pool is usually 10–30; across all instances stay under the DB ceiling. More connections ≠ more throughput — context switching and lock contention dominate past the ceiling.
 - Always set `spring.datasource.hikari.connection-timeout` (default 30s) and `max-lifetime` (shorter than DB/proxy idle timeout).
 - Leak detection in non-prod: `spring.datasource.hikari.leak-detection-threshold=5000`.
 

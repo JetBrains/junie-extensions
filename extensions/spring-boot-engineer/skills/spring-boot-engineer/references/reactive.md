@@ -12,7 +12,7 @@ Use it when **any** of these is true:
 
 Use plain MVC otherwise. **Wrapping a blocking JDBC repo in `Mono.fromCallable(...).subscribeOn(boundedElastic())` is not WebFlux — it's MVC with extra steps and worse debugging.**
 
-Spring Boot 3.2+ virtual threads (`spring.threads.virtual.enabled=true`) are often the better answer when you want "lots of concurrent blocking I/O" without rewriting everything reactively.
+Spring Boot virtual threads (`spring.threads.virtual.enabled=true`, available since 3.2, standard in Boot 4.x) are often the better answer when you want "lots of concurrent blocking I/O" without rewriting everything reactively.
 
 ## Absolute rules
 
@@ -23,7 +23,7 @@ Spring Boot 3.2+ virtual threads (`spring.threads.virtual.enabled=true`) are oft
 
 ## Context & logging
 
-- MDC doesn't propagate automatically across reactive operators. Use Micrometer's **Context Propagation** library (`io.micrometer:context-propagation`) + `Hooks.enableAutomaticContextPropagation()` (Reactor 3.5.3+). Spring Boot 3.2+ wires it for you.
+- MDC doesn't propagate automatically across reactive operators. Use Micrometer's **Context Propagation** library (`io.micrometer:context-propagation`) + `Hooks.enableAutomaticContextPropagation()` — Spring Boot auto-wires this.
 - Never store per-request data in `ThreadLocal` — the thread changes between operators. Pass through `ContextView` / Reactor `Context`.
 
 ## Backpressure

@@ -14,10 +14,10 @@ Generic knowledge of JUnit 5, Mockito, MockMvc, `@SpringBootTest` is assumed. Th
 
 Rule: one `@SpringBootTest` per critical end-to-end flow, not per test class.
 
-## `@MockBean` is deprecated (Spring Boot 3.4+)
+## `@MockBean` / `@SpyBean` removed (Spring Boot 4.0)
 
-- New: `@MockitoBean` / `@MockitoSpyBean` (from `org.springframework.test.context.bean.override.mockito`).
-- Old: `@MockBean` / `@SpyBean` still work but are marked deprecated.
+- **Removed** in Boot 4.0 — will not compile. Use `@MockitoBean` / `@MockitoSpyBean` (from `org.springframework.test.context.bean.override.mockito`).
+- Were deprecated in Boot 3.4; fully removed in Boot 4.0.
 - In Kotlin, if your production class is `final`, Mockito needs `mockito-inline` (and `kotlin-spring` plugin if the class is Spring-managed).
 
 Each unique combination of `@MockitoBean` + other context customizers produces a **new ApplicationContext**. That's why tests suddenly start at 60s — keep mock beans consistent across test classes or suites get slow.
@@ -63,5 +63,5 @@ Each unique combination of `@MockitoBean` + other context customizers produces a
 ## Testcontainers performance
 
 - `@Testcontainers(parallel = true)` starts containers in parallel within a test class.
-- Global singleton pattern: declare `static final PostgreSQLContainer<?> DB = new PostgreSQLContainer<>("postgres:16").withReuse(true); static { DB.start(); }` and point `@ServiceConnection` / `@DynamicPropertySource` at it. One container for the entire suite.
+- Global singleton pattern: declare `static final PostgreSQLContainer<?> DB = new PostgreSQLContainer<>("postgres:18").withReuse(true); static { DB.start(); }` and point `@ServiceConnection` / `@DynamicPropertySource` at it. One container for the entire suite.
 - Ryuk cleanup can be disabled for CI where the runner itself is ephemeral (`TESTCONTAINERS_RYUK_DISABLED=true`) — saves 2–3s per test class.

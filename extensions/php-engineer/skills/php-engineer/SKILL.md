@@ -11,7 +11,7 @@ Baseline PHP 8.x knowledge (enums, readonly, match, nullsafe, union/intersection
 
 Before writing non-trivial code:
 
-1. **PHP version** — `composer.json` must declare `"php": ">=8.2"` (or higher). Check `php --version` if running locally.
+1. **PHP version** — `composer.json` must declare `"php": ">=8.3"` (or higher). PHP 8.2 is in security-only mode; 8.3+ is the minimum for new projects. Check `php --version` if running locally.
 2. **`declare(strict_types=1);`** at the top of every file. Non-negotiable — without it PHP coerces `"42"` → `42`, `3.7` → `3`, `"abc"` → `0` silently.
 3. **Static analysis** — `vendor/bin/phpstan` (target level 8+) and/or `vendor/bin/psalm`. If missing, suggest `composer require --dev phpstan/phpstan`. Run before presenting code.
 4. **Formatter** — `vendor/bin/pint` / `php-cs-fixer` / `phpcs`. Respect the existing config; don't introduce new violations.

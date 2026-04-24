@@ -44,7 +44,7 @@ Run scenarios on the emulator by visually inspecting the UI and verifying via lo
 - **Back navigation** — `mobile_press_button BACK` throughout the flow; does it work correctly?
 - **Rotation** — `mobile_set_orientation landscape` / `portrait` — does state persist?
 - **Permissions** — deny a permission: `adb shell pm revoke <package> android.permission.CAMERA`.
-- **Low memory** — `adb shell am send-trim-memory <package> MODERATE`.
+- **Low memory** — `adb shell am send-trim-memory <package> MODERATE` (requires `android:debuggable="true"` or `adb root`; otherwise silently ignored — verify `onTrimMemory` in logcat).
 - **Dark mode** — `adb shell "cmd uimode night yes"`.
 - **Deep links** — `mobile_open_url "myapp://some/path"`.
 
