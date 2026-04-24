@@ -1,4 +1,4 @@
 {
   "name": "sql-engineer",
-  "description": "SQL and database migrations: Flyway/Liquibase, query optimization, indexing strategies, safe schema changes, and raw SQL best practices."
+  "description": "SQL policy & pitfalls — query correctness, indexing, safe Flyway/Liquibase migrations. Catches NOT IN with NULLs, function-on-column breaking indexes, OFFSET on large tables, ALTER NOT NULL locking, CREATE INDEX blocking writes, immutable migrations, dialect-specific transaction behavior."
 }

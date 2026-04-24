@@ -1,4 +1,4 @@
 {
   "name": "java-engineer",
-  "description": "Java 21 language features, idioms, and coding standards. Covers records, sealed classes, pattern matching, virtual threads, streams, Optional, generics, exception handling, and naming conventions. Pure Java — no framework-specific content."
+  "description": "Java 17–21 policy and pitfalls. Enforces Optional / sealed / switch-exhaustiveness / virtual-threads rules and catches the subtle language traps (Stream.toList mutability, orElse vs orElseGet, carrier pinning, pattern-matching null) that LLMs get wrong by default."
 }

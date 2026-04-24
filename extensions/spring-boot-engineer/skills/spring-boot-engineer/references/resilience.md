@@ -1,304 +1,67 @@
-# Resilience4j — Fault Tolerance Patterns
+# Resilience4j — policy & pitfalls
 
-## Dependencies
+Generic knowledge of `@CircuitBreaker`, `@Retry`, `@RateLimiter`, `@Bulkhead`, `@TimeLimiter` is assumed. This file is about where they break.
 
-```xml
-<!-- Maven -->
-<dependency>
-    <groupId>io.github.resilience4j</groupId>
-    <artifactId>resilience4j-spring-boot3</artifactId>
-    <version>2.2.0</version>
-</dependency>
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-aop</artifactId>
-</dependency>
+## Annotation order matters
+
+When stacking on the same method, the order (outer → inner) is:
+
+```
+@CircuitBreaker → @RateLimiter → @TimeLimiter → @Bulkhead → @Retry → method
 ```
 
-```kotlin
-// Gradle (Kotlin DSL)
-implementation("io.github.resilience4j:resilience4j-spring-boot3:2.2.0")
-implementation("org.springframework.boot:spring-boot-starter-aop")
+Pick stacking order deliberately; most apps need at most `@CircuitBreaker` + `@Retry` + `@TimeLimiter`.
 
-// For Kotlin suspend functions:
-implementation("io.github.resilience4j:resilience4j-kotlin:2.2.0")
-```
+## `fallbackMethod`
 
----
+- Must be in the **same class** as the annotated method.
+- Same return type.
+- Signature must accept the same parameters **plus one extra** `Throwable` (or a specific subtype) as the last parameter. One fallback per exception type is fine; resolution picks the most specific.
+- Reactive methods (`Mono` / `Flux`): fallback must also return `Mono` / `Flux` — **never `.block()` inside fallback**.
 
-## Circuit Breaker
+## Proxy rules (same as `@Transactional`)
 
-```java
-@Service
-@RequiredArgsConstructor
-public class PaymentService {
-
-    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
-    public PaymentResponse processPayment(PaymentRequest request) {
-        return restTemplate.postForObject("http://payment-api/process",
-            request, PaymentResponse.class);
-    }
-
-    private PaymentResponse paymentFallback(PaymentRequest request, Throwable ex) {
-        return new PaymentResponse("PENDING", "Service temporarily unavailable");
-    }
-}
-```
-
-```yaml
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50          # % of failures to open
-        waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-    instances:
-      paymentService:
-        baseConfig: default
-```
-
-**States**: CLOSED (normal) → OPEN (failing, rejects calls) → HALF_OPEN (trial calls) → CLOSED
-
----
+- Annotation only works on `public` non-final methods via the Spring proxy.
+- **Self-invocation skips the advice** — call from another bean, or inject `self`.
+- Kotlin: `kotlin-spring` plugin required so classes / methods are `open`.
 
 ## Retry
 
-```java
-@Service
-@RequiredArgsConstructor
-public class ProductService {
+- Always exponential backoff with jitter: `wait-duration=200ms`, `exponential-backoff-multiplier=2`, `randomized-wait-factor=0.5`. Fixed-interval retry across many clients creates thundering herds.
+- `retry-exceptions` / `ignore-exceptions` are checked by class. For idempotent operations only — **don't retry `POST` that mutates state** unless you have an idempotency key.
+- `@Retry` + `@CircuitBreaker`: the circuit breaker counts each retry as a call. Prefer retrying **inside** the circuit breaker (default order above does this), or tune breaker thresholds.
 
-    @Retry(name = "productService", fallbackMethod = "getProductFallback")
-    public Product getProduct(Long productId) {
-        return restTemplate.getForObject("/products/" + productId, Product.class);
-    }
+## Circuit breaker
 
-    private Product getProductFallback(Long productId, Throwable ex) {
-        return new Product(productId, "Unavailable", false);
-    }
-}
-```
+- `slidingWindowType=COUNT_BASED` with a small window (e.g. 10) reacts fast but is noisy; `TIME_BASED` is smoother for bursty traffic.
+- `minimumNumberOfCalls` must be lower than `slidingWindowSize` — otherwise the breaker never evaluates. A common bug.
+- `slowCallDurationThreshold` + `slowCallRateThreshold` are what actually catch "everything is timing out but still returns 200". Set them alongside `failureRateThreshold`.
+- Breaker state is **per instance** — no cluster awareness. For shared state you need an external system (this is rarely worth it).
 
-```yaml
-resilience4j:
-  retry:
-    configs:
-      default:
-        maxAttempts: 3
-        waitDuration: 500ms
-        enableExponentialBackoff: true
-        exponentialBackoffMultiplier: 2
-        retryExceptions:
-          - java.io.IOException
-          - java.util.concurrent.TimeoutException
-        ignoreExceptions:
-          - com.example.BusinessException  # Don't retry business errors
-    instances:
-      productService:
-        baseConfig: default
-        maxAttempts: 5
-```
+## Time limiter
 
-> **Warning**: Only retry idempotent operations. Never use `@Retry` on non-idempotent POST endpoints.
-
----
-
-## Rate Limiter
-
-```java
-@Service
-@RequiredArgsConstructor
-public class NotificationService {
-
-    @RateLimiter(name = "notificationService", fallbackMethod = "rateLimitFallback")
-    public void sendEmail(EmailRequest request) {
-        emailClient.send(request);
-    }
-
-    private void rateLimitFallback(EmailRequest request, Throwable ex) {
-        throw new RateLimitExceededException("Too many requests. Retry after 1s.");
-    }
-}
-```
-
-```yaml
-resilience4j:
-  ratelimiter:
-    instances:
-      notificationService:
-        limitForPeriod: 10       # max calls per period
-        limitRefreshPeriod: 1s
-        timeoutDuration: 500ms   # how long to wait for a permit
-```
-
----
+- Required for reactive flows — `@CircuitBreaker` on a `Mono` won't detect hangs; only `@TimeLimiter` does.
+- On blocking methods use `@TimeLimiter` with `CompletableFuture<T>` return type; it runs the call on a separate thread, which is cheap only up to a point — don't time-limit everything.
 
 ## Bulkhead
 
-Use `SEMAPHORE` for synchronous methods, `THREADPOOL` for async/CompletableFuture:
+- `SemaphoreBulkhead` (default) — caps concurrent calls on the calling thread. Cheap.
+- `ThreadPoolBulkhead` — isolates with a dedicated pool. Use sparingly; each bulkhead = separate pool.
 
-```java
-@Service
-public class ReportService {
+## Rate limiter
 
-    @Bulkhead(name = "reportService", type = Bulkhead.Type.SEMAPHORE)
-    public Report generateReport(ReportRequest request) {
-        return reportGenerator.generate(request);
-    }
+- `@RateLimiter` throttles local callers — not a distributed rate limit. For cross-instance limiting you need Redis / Bucket4j + external storage.
+- Default `timeoutDuration=5s` means the rate limiter **waits** for a permit. For strict fail-fast, set `timeoutDuration=0ms`.
 
-    @Bulkhead(name = "analyticsService", type = Bulkhead.Type.THREADPOOL)
-    public CompletableFuture<AnalyticsResult> runAnalytics(AnalyticsRequest request) {
-        return CompletableFuture.supplyAsync(() -> analyticsEngine.analyze(request));
-    }
-}
-```
+## Observability
 
-```yaml
-resilience4j:
-  bulkhead:
-    instances:
-      reportService:
-        maxConcurrentCalls: 5
-        maxWaitDuration: 100ms
-  thread-pool-bulkhead:
-    instances:
-      analyticsService:
-        maxThreadPoolSize: 8
-        coreThreadPoolSize: 4
-```
+- Actuator endpoints `/actuator/circuitbreakers`, `/actuator/retries`, `/actuator/ratelimiters` show live state. Expose them behind auth.
+- Micrometer metrics are published automatically when `spring-boot-starter-actuator` + Resilience4j are both on the classpath. Alert on `resilience4j.circuitbreaker.state{state="open"}`.
 
----
+## Common mistakes
 
-## Time Limiter
-
-```java
-@Service
-public class SearchService {
-
-    @TimeLimiter(name = "searchService", fallbackMethod = "searchFallback")
-    public CompletableFuture<SearchResults> search(SearchQuery query) {
-        return CompletableFuture.supplyAsync(() -> searchEngine.execute(query));
-    }
-
-    private CompletableFuture<SearchResults> searchFallback(SearchQuery query, Throwable ex) {
-        return CompletableFuture.completedFuture(SearchResults.empty("Search timed out"));
-    }
-}
-```
-
-```yaml
-resilience4j:
-  timelimiter:
-    instances:
-      searchService:
-        timeoutDuration: 3s
-        cancelRunningFuture: true
-```
-
----
-
-## Combining Patterns
-
-Execution order: **Retry → CircuitBreaker → RateLimiter → Bulkhead → Method**
-
-```java
-@Service
-public class OrderService {
-
-    @CircuitBreaker(name = "orderService")
-    @Retry(name = "orderService")
-    @RateLimiter(name = "orderService")
-    @Bulkhead(name = "orderService")
-    public Order createOrder(OrderRequest request) {
-        return orderClient.create(request);
-    }
-}
-```
-
----
-
-## Kotlin Suspend Functions
-
-Annotation-based Resilience4j does **not** work on `suspend` functions — use the functional API:
-
-```kotlin
-@Service
-class PaymentService(
-    private val cbRegistry: CircuitBreakerRegistry,
-    private val retryRegistry: RetryRegistry,
-    private val webClient: WebClient,
-) {
-    private val cb    = cbRegistry.circuitBreaker("paymentService")
-    private val retry = retryRegistry.retry("paymentService")
-
-    suspend fun processPayment(request: PaymentRequest): PaymentResponse =
-        retry.executeSuspendFunction {
-            cb.executeSuspendFunction {
-                webClient.post().uri("/process")
-                    .bodyValue(request)
-                    .retrieve()
-                    .awaitBody<PaymentResponse>()
-            }
-        }
-}
-```
-
----
-
-## Exception Handler for Resilience4j
-
-```java
-@RestControllerAdvice
-public class ResilienceExceptionHandler {
-
-    @ExceptionHandler(CallNotPermittedException.class)
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    public ErrorResponse handleCircuitOpen(CallNotPermittedException ex) {
-        return new ErrorResponse("SERVICE_UNAVAILABLE", "Service temporarily unavailable");
-    }
-
-    @ExceptionHandler(RequestNotPermitted.class)
-    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-    public ErrorResponse handleRateLimited(RequestNotPermitted ex) {
-        return new ErrorResponse("TOO_MANY_REQUESTS", "Rate limit exceeded");
-    }
-
-    @ExceptionHandler(BulkheadFullException.class)
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    public ErrorResponse handleBulkheadFull(BulkheadFullException ex) {
-        return new ErrorResponse("CAPACITY_EXCEEDED", "Service at capacity");
-    }
-}
-```
-
-## Monitoring (Actuator)
-
-```yaml
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,metrics,circuitbreakers,retries,ratelimiters
-  endpoint:
-    health:
-      show-details: always
-  health:
-    circuitbreakers:
-      enabled: true
-```
-
-Endpoints: `GET /actuator/circuitbreakers`, `GET /actuator/metrics/resilience4j.circuitbreaker.calls`
-
-## Best Practices
-
-- Always provide fallback methods with meaningful degraded responses
-- Use exponential backoff for retries (`exponentialBackoffMultiplier: 2`)
-- Set `failureRateThreshold` between 50–70% depending on error tolerance
-- Only retry transient errors (network, 5xx) — never business exceptions (4xx)
-- Size bulkheads from expected concurrent load × average latency
-- Enable `registerHealthIndicator: true` on all instances for visibility
+- Using `@Retry` on non-idempotent writes without idempotency keys — duplicate orders / charges.
+- `fallbackMethod` lives in another class → `NoSuchMethodException` at startup.
+- Wrapping a reactive chain with only `@CircuitBreaker` (no `@TimeLimiter`) → slow calls never count as failures.
+- Stacking `@Retry` (say 3 attempts) on top of another `@Retry` upstream → combinatorial explosion (9 retries, 27...).
+- Relying on `@RateLimiter` for distributed limiting.

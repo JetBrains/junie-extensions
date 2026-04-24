@@ -1,4 +1,4 @@
 {
   "name": "kotlin-engineer",
-  "description": "Complete Kotlin development guide: coroutines, Flow, DSL patterns, idiomatic Kotlin, Ktor server, Android Compose, Kotlin Multiplatform, architecture review, performance, and debugging. Self-contained — works with or without Spring Boot."
+  "description": "Kotlin 2.x policy and pitfalls. Enforces coroutine-safety, Flow correctness, null-safety, and API-design rules. Catches traps LLMs routinely miss: swallowed CancellationException, leaked MutableStateFlow, sequential async/await, flowOn placement, missing kotlin-spring/kotlin-jpa plugins."
 }

@@ -1,260 +1,62 @@
-# Web Layer - Controllers & REST APIs
+# Web Layer — policy & pitfalls
 
-## REST Controller Pattern
+Generic REST / Spring MVC knowledge (`@RestController`, `@GetMapping`, `@PathVariable`, `@Valid`) is assumed. This file only covers decisions that typically go wrong.
 
-```java
-@RestController
-@RequestMapping("/api/v1/users")
-@Validated
-@RequiredArgsConstructor
-public class UserController {
-    private final UserService userService;
+## DTO boundary
 
-    @GetMapping
-    public ResponseEntity<Page<UserResponse>> getUsers(
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        Page<UserResponse> users = userService.findAll(pageable);
-        return ResponseEntity.ok(users);
-    }
+- **Never return or accept `@Entity` types from controllers.** Exposes persistence details, causes `LazyInitializationException` / `could not initialize proxy — no Session`, couples API to schema.
+- Request / response DTOs → Java `record` or Kotlin `data class`. One `FooRequest` and one `FooResponse` per endpoint; don't reuse the same DTO for both directions.
+- Mapping entity ↔ DTO lives in the service (or a dedicated mapper), not in the controller.
 
-    @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
-        UserResponse user = userService.findById(id);
-        return ResponseEntity.ok(user);
-    }
+## Validation
 
-    @PostMapping
-    public ResponseEntity<UserResponse> createUser(
-            @Valid @RequestBody UserCreateRequest request) {
-        UserResponse user = userService.create(request);
-        URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(user.id())
-                .toUri();
-        return ResponseEntity.created(location).body(user);
-    }
+- Every mutating endpoint: `@Valid @RequestBody` on the argument **and** constraints on the DTO fields (`@NotBlank`, `@Email`, `@Size`, `@Pattern`, `@Min/@Max`).
+- `@Validated` on the controller class is required for validating `@PathVariable` / `@RequestParam` (method-level validation).
+- Kotlin: use `@field:NotBlank` on `data class` properties — bare `@NotBlank` on a Kotlin property targets the constructor parameter and is silently ignored by Jakarta Validation.
 
-    @PutMapping("/{id}")
-    public ResponseEntity<UserResponse> updateUser(
-            @PathVariable Long id,
-            @Valid @RequestBody UserUpdateRequest request) {
-        UserResponse user = userService.update(id, request);
-        return ResponseEntity.ok(user);
-    }
+## Error handling
 
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteUser(@PathVariable Long id) {
-        userService.delete(id);
-    }
-}
-```
+- Use `ProblemDetail` (RFC 7807) — built-in since Spring 6. Do not hand-roll `ErrorResponse` records.
+- One `@RestControllerAdvice` with handlers for: `MethodArgumentNotValidException` (400 + field errors), domain `NotFoundException` (404), `DataIntegrityViolationException` (409), fallback `Exception` (500, log full stack, return generic message).
+- Never leak stack traces or SQL fragments to clients.
+- Set `spring.mvc.problemdetails.enabled=true` to let Spring produce `ProblemDetail` for framework exceptions automatically.
 
-## Request DTOs with Validation
+## Pagination
+
+- Prefer `Pageable` + `@PageableDefault(size = 20, sort = "id")` over manual `page` / `size` params.
+- Return `Page<DTO>` when the UI needs total count; return `Slice<DTO>` when it only needs next/prev (cheaper — skips `COUNT(*)`).
+- Cap max page size via `spring.data.web.pageable.max-page-size=100` to prevent clients requesting `?size=1000000`.
+
+## Outbound HTTP
+
+- Use `RestClient` (synchronous, fluent) or declarative `@HttpExchange` interfaces. `RestTemplate` auto-configuration is **opt-in only in Boot 4** — it is no longer auto-configured by default. Avoid `RestTemplate` in new code.
+- Use `WebClient` only in WebFlux apps (or when you actually need reactive / streaming). Inside MVC it works but adds complexity for no benefit.
+- Always set a timeout. Default `RestClient` / `WebClient` have **no read timeout** — requests can hang forever.
+
+## API versioning (Spring Boot 4.x)
+
+Spring Boot 4 adds first-class API versioning via a `version` attribute on mapping annotations:
 
 ```java
-public record UserCreateRequest(
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email must be valid")
-    String email,
+@GetMapping(value = "/{id}", version = "1.0")
+public UserResponseV1 getV1(@PathVariable Long id) { ... }
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, max = 100, message = "Password must be 8-100 characters")
-    @Pattern(regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d).*$",
-             message = "Password must contain uppercase, lowercase, and digit")
-    String password,
-
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50)
-    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username must be alphanumeric")
-    String username,
-
-    @Min(value = 18, message = "Must be at least 18")
-    @Max(value = 120, message = "Must be at most 120")
-    Integer age
-) {}
-
-public record UserUpdateRequest(
-    @Email(message = "Email must be valid")
-    String email,
-
-    @Size(min = 3, max = 50)
-    String username
-) {}
+@GetMapping(value = "/{id}", version = "2.0+")
+public UserResponseV2 getV2(@PathVariable Long id) { ... }
 ```
 
-## Response DTOs
+- `"1.2"` — exact version match; `"1.2+"` — matches 1.2 and above.
+- Configure via `spring.mvc.apiversion.*` (MVC) or `spring.webflux.apiversion.*` (WebFlux).
+- Version is resolved from the request (header, query param, or path — configurable).
+- Use when the project has explicit API versioning requirements; skip for internal services.
 
-```java
-public record UserResponse(
-    Long id,
-    String email,
-    String username,
-    Integer age,
-    Boolean active,
-    LocalDateTime createdAt,
-    LocalDateTime updatedAt
-) {
-    public static UserResponse from(User user) {
-        return new UserResponse(
-            user.getId(),
-            user.getEmail(),
-            user.getUsername(),
-            user.getAge(),
-            user.getActive(),
-            user.getCreatedAt(),
-            user.getUpdatedAt()
-        );
-    }
-}
-```
+## CORS
 
-## Global Exception Handling
+- Prefer a single `CorsConfigurationSource` bean wired into `SecurityFilterChain` over `WebMvcConfigurer.addCorsMappings`. When security is on, the filter-chain config is the one that actually fires first; the MVC-level one gets bypassed for preflights.
+- Never use `allowedOrigins("*")` together with `allowCredentials(true)` — Spring throws at startup, and browsers reject the response anyway.
 
-Spring Boot 3.x supports **RFC 7807 ProblemDetail** natively — prefer it over custom `ErrorResponse` records:
+## Deprecations to avoid
 
-```java
-@RestControllerAdvice
-@Slf4j
-public class GlobalExceptionHandler {
-
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
-        log.warn("Resource not found: {}", ex.getMessage());
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty("timestamp", Instant.now());
-        return problem;
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
-        problem.setProperty("errors", ex.getBindingResult().getFieldErrors().stream()
-            .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .toList());
-        problem.setProperty("timestamp", Instant.now());
-        return problem;
-    }
-
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex) {
-        log.error("Data integrity violation", ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
-            "Data integrity violation - resource may already exist");
-        problem.setProperty("timestamp", Instant.now());
-        return problem;
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGeneric(Exception ex) {
-        log.error("Unexpected error", ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-            "An unexpected error occurred");
-        problem.setProperty("timestamp", Instant.now());
-        return problem;
-    }
-}
-```
-
-`ProblemDetail` implements RFC 7807 — returns structured JSON with `type`, `title`, `status`, `detail`, plus custom properties. No extra record classes needed.
-
-## Custom Validation
-
-```java
-@Target({ElementType.FIELD, ElementType.PARAMETER})
-@Retention(RetentionPolicy.RUNTIME)
-@Constraint(validatedBy = UniqueEmailValidator.class)
-public @interface UniqueEmail {
-    String message() default "Email already exists";
-    Class<?>[] groups() default {};
-    Class<? extends Payload>[] payload() default {};
-}
-
-@Component
-@RequiredArgsConstructor
-public class UniqueEmailValidator implements ConstraintValidator<UniqueEmail, String> {
-    private final UserRepository userRepository;
-
-    @Override
-    public boolean isValid(String email, ConstraintValidatorContext context) {
-        if (email == null) return true;
-        return !userRepository.existsByEmail(email);
-    }
-}
-```
-
-## WebClient for External APIs
-
-```java
-@Configuration
-public class WebClientConfig {
-    @Bean
-    public WebClient webClient(WebClient.Builder builder) {
-        return builder
-            .baseUrl("https://api.example.com")
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .filter(logRequest())
-            .build();
-    }
-
-    private ExchangeFilterFunction logRequest() {
-        return ExchangeFilterFunction.ofRequestProcessor(request -> {
-            log.info("Request: {} {}", request.method(), request.url());
-            return Mono.just(request);
-        });
-    }
-}
-
-@Service
-@RequiredArgsConstructor
-public class ExternalApiService {
-    private final WebClient webClient;
-
-    public Mono<ExternalDataResponse> fetchData(String id) {
-        return webClient
-            .get()
-            .uri("/data/{id}", id)
-            .retrieve()
-            .onStatus(HttpStatusCode::is4xxClientError, response ->
-                Mono.error(new ResourceNotFoundException("External resource not found")))
-            .onStatus(HttpStatusCode::is5xxServerError, response ->
-                Mono.error(new ServiceUnavailableException("External service unavailable")))
-            .bodyToMono(ExternalDataResponse.class)
-            .timeout(Duration.ofSeconds(5))
-            .retry(3);
-    }
-}
-```
-
-## CORS Configuration
-
-```java
-@Configuration
-public class WebConfig implements WebMvcConfigurer {
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-            .allowedOrigins("http://localhost:3000", "https://example.com")
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-            .allowedHeaders("*")
-            .allowCredentials(true)
-            .maxAge(3600);
-    }
-}
-```
-
-## Quick Reference
-
-| Annotation | Purpose |
-|------------|---------|
-| `@RestController` | Marks class as REST controller (combines @Controller + @ResponseBody) |
-| `@RequestMapping` | Maps HTTP requests to handler methods |
-| `@GetMapping/@PostMapping` | HTTP method-specific mappings |
-| `@PathVariable` | Extracts values from URI path |
-| `@RequestParam` | Extracts query parameters |
-| `@RequestBody` | Binds request body to method parameter |
-| `@Valid` | Triggers validation on request body |
-| `@RestControllerAdvice` | Global exception handling for REST controllers |
-| `@ResponseStatus` | Sets HTTP status code for method |
+- `WebMvcConfigurerAdapter` → implement `WebMvcConfigurer` directly.
+- `antMatchers(...)` in security / MVC config → `requestMatchers(...)`.
+- `@RequestMapping(method = RequestMethod.GET)` on a method → `@GetMapping` / `@PostMapping` / ...

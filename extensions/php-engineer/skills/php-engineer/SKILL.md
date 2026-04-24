@@ -1,158 +1,65 @@
 ---
 name: php-engineer
-description: Use when writing modern PHP 8.x code. Covers the type system, enums, fibers, match expressions, readonly properties, named arguments, nullsafe operators, PSR standards, and Composer conventions. Use for any PHP project regardless of framework.
+description: Modern PHP 8.x policy and pitfalls. Use when writing, reviewing, or refactoring PHP code — enforces strict types, enum/readonly/match/DNF policy, PHPStan discipline, and catches the subtle traps (type coercion, mixed abuse, readonly mutation through references, enum serialization, fiber lifecycle, PDO emulation) that LLMs get wrong by default.
 ---
 
-# PHP Engineer
+# PHP — policy & pitfalls
 
-## Core Workflow
+Baseline PHP 8.x knowledge (enums, readonly, match, nullsafe, union/intersection/DNF types, named arguments, first-class callables, fibers, PSR-1/4/12, Composer) is assumed. This skill does not teach the language — it encodes project policy and the traps that keep appearing in code review.
 
-1. **Declare types everywhere** — parameters, return types, property types; aim for PHPStan level 8+
-2. **Use modern syntax** — match over switch, enums over constants, readonly where immutable
-3. **Follow PSR-12** — consistent formatting, PSR-4 autoloading, PSR-7/15 for HTTP
-4. **Validate statically** — PHPStan must pass before committing; run `./vendor/bin/phpstan analyse` and fix all reported errors before presenting code
+## Setup Check (run first)
+
+Before writing non-trivial code:
+
+1. **PHP version** — `composer.json` must declare `"php": ">=8.3"` (or higher). PHP 8.2 is in security-only mode; 8.3+ is the minimum for new projects. Check `php --version` if running locally.
+2. **`declare(strict_types=1);`** at the top of every file. Non-negotiable — without it PHP coerces `"42"` → `42`, `3.7` → `3`, `"abc"` → `0` silently.
+3. **Static analysis** — `vendor/bin/phpstan` (target level 8+) and/or `vendor/bin/psalm`. If missing, suggest `composer require --dev phpstan/phpstan`. Run before presenting code.
+4. **Formatter** — `vendor/bin/pint` / `php-cs-fixer` / `phpcs`. Respect the existing config; don't introduce new violations.
+5. **Lock file** — `composer.lock` must be committed for applications. Never commit `vendor/`.
+6. **Framework** — check for `laravel/framework`, `symfony/framework-bundle`, etc. If present, **stop and load the corresponding framework skill** (`laravel-engineer`, etc.); this skill is pure PHP only.
+
+## MUST DO
+
+- **Strict types in every file** — `declare(strict_types=1);` on line 1 after `<?php`.
+- **Type everything** — parameters, return types, property types. Untyped code is an error.
+- **Backed `enum`** for closed value sets — never `class Status { const ACTIVE = 'active'; }`.
+- **`readonly` for immutable data** — DTOs, value objects, events. Prefer `readonly class` (PHP 8.2+) over per-property `readonly`.
+- **`match` over `switch`** — strict comparison (`===`), exhaustive, returns value, throws `UnhandledMatchError` on miss.
+- **Named arguments for 3+ parameters** — `new UserDto(id: 1, name: 'n', email: 'e')` prevents silent argument swaps.
+- **Constructor property promotion** — no separate property declarations + manual assignments.
+- **`DateTimeImmutable`** — never `DateTime`; the mutable one causes aliasing bugs.
+- **Prepared statements** for every SQL query reaching user input. Bind with named or `?` placeholders — never string-concat.
+- **`password_hash($p, PASSWORD_BCRYPT)`** / `PASSWORD_ARGON2ID` + `password_verify`. Never `md5`/`sha1`/`sha256` for passwords.
+- **Parameterized logging via PSR-3** — `$logger->info('user.updated', ['id' => $id])`, not string concat.
+
+## MUST NOT DO
+
+- **No `mixed` without a PHPDoc comment** explaining why — it disables type checking on the value.
+- **No untyped `array` in public API** — annotate with PHPDoc: `/** @param list<User> $users */` or `/** @return array<string, int> */`.
+- **No raw `SimpleXMLElement` / `json_decode` without validation** — use `json_validate()` (PHP 8.3+) first, or `JSON_THROW_ON_ERROR`.
+- **No `(array)` cast on objects** to "export state" — it exposes private/protected with mangled keys (`"\0*\0prop"`).
+- **No mutating a `readonly` property through a reference** — `$ref = &$obj->prop` throws `Error` on PHP 8.1+; PHP 8.3 also closed indirect bypass loopholes. Use `clone` or a `with*()` factory method to produce a modified copy.
+- **No `foreach ($arr as &$v)` without `unset($v)` after** — the reference leaks to the outer scope and a later assignment silently mutates the array.
+- **No `count($big) === 0` to check emptiness** — use `$big === []` or `empty($big)`. `count()` on a `Countable` object can be expensive, and `count(null)` returns `0` silently (pre-8.x).
+- **No `!=` / `==`** — always `!==` / `===`. `0 == "abc"` was `true` until PHP 8, and string/array comparisons still surprise.
+- **No catching `\Throwable`** to silence errors — catch the specific exception type or let it propagate.
+- **No `global` / service locator** — constructor-inject everything.
+- **No credentials / PII in logs or error messages.**
 
 ## Reference Guide
 
-Load detailed guidance based on context:
-
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| PHP 8.x Features | `references/php8-features.md` | match, enums, fibers, named args, nullsafe, first-class callables, intersection types |
-| Type System | `references/types.md` | union types, intersection types, generics via PHPDoc, never, mixed, void |
-| PSR Standards | `references/psr-standards.md` | PSR-1, PSR-4, PSR-12, PSR-7, PSR-15, HTTP middleware |
-| Composer | `references/composer.md` | autoloading, scripts, version constraints, lock file, platform requirements |
-
-## Quick Start
-
-### Enum (replace class constants)
-
-```php
-enum Status: string
-{
-    case Active   = 'active';
-    case Inactive = 'inactive';
-    case Pending  = 'pending';
-
-    public function label(): string
-    {
-        return match($this) {
-            Status::Active   => 'Active',
-            Status::Inactive => 'Inactive',
-            Status::Pending  => 'Pending',
-        };
-    }
-
-    public function isActive(): bool
-    {
-        return $this === Status::Active;
-    }
-}
-```
-
-### Readonly DTO
-
-```php
-readonly class UserDto
-{
-    public function __construct(
-        public int    $id,
-        public string $name,
-        public string $email,
-    ) {}
-
-    public static function from(array $data): self
-    {
-        return new self(
-            id:    $data['id'],
-            name:  $data['name'],
-            email: $data['email'],
-        );
-    }
-}
-```
-
-### Match expression
-
-```php
-$discount = match(true) {
-    $total >= 1000 => 0.20,
-    $total >= 500  => 0.10,
-    $total >= 100  => 0.05,
-    default        => 0.00,
-};
-```
-
-### Nullsafe operator
-
-```php
-// ✅ DO
-$city = $user?->address?->city;
-
-// ❌ DON'T
-$city = $user ? ($user->address ? $user->address->city : null) : null;
-```
-
-### First-class callables
-
-```php
-$lengths  = array_map(strlen(...), $strings);
-$filtered = array_filter($items, $this->isValid(...));
-```
-
-### Fibers (cooperative multitasking)
-
-```php
-$fiber = new Fiber(function (): void {
-    $value = Fiber::suspend('first');
-    echo "Got: {$value}\n";
-});
-
-$first = $fiber->start();        // 'first'
-$fiber->resume('hello');         // Got: hello
-```
-
-## Setup Check
-
-When working on a PHP project, verify:
-- `composer.json` exists and declares `"php": ">=8.2"`
-- `vendor/bin/phpstan` missing → suggest: `composer require --dev phpstan/phpstan`
-- `phpstan.neon` missing → create minimal config at level 8
-- Run static analysis: `./vendor/bin/phpstan analyse` — fix all errors before presenting code
-
-## Constraints
-
-### MUST DO
-
-| Rule | Correct Pattern |
-|------|----------------|
-| Declare strict types in every file | `declare(strict_types=1);` at top of file |
-| Type all parameters and returns | `function process(int $id): UserDto` |
-| Type all class properties | `private readonly string $name;` |
-| Use enums for fixed value sets | `enum Status: string { case Active = 'active'; }` |
-| Use match over switch | `match($val) { 1 => 'one', default => 'other' }` |
-| Use named arguments for readability | `new UserDto(id: 1, name: 'John', email: 'j@x.com')` |
-| Use readonly for immutable data | `readonly class MoneyDto { ... }` |
-| Add PHPDoc for complex logic | `/** @param array<string, int> $scores */` |
-| Use dependency injection over global state | Constructor injection, no service locator pattern |
-
-### MUST NOT DO
-
-- Use untyped properties or parameters
-- Use `mixed` without a PHPDoc explaining why
-- Use `switch` where `match` is cleaner and exhaustive
-- Define class constants where backed enums are more expressive
-- Ignore PHPStan errors or suppress them without fixing root cause
-- Use `array` without a PHPDoc type hint for element types
-- Store passwords in plain text — use `password_hash()` with `PASSWORD_BCRYPT` or `PASSWORD_ARGON2ID`
-- Write raw SQL without prepared statements — use PDO prepared statements or a query builder
-- Hardcode credentials or environment-specific values — use `.env` and `getenv()`
+| Load when | File |
+|---|---|
+| Debugging subtle language / API behavior (enums, readonly, match, fibers, arrays, dates, comparison) | `references/pitfalls.md` |
+| Designing type signatures (PHPStan generics, DNF, `mixed`/`never`/`void`, narrowing) | `references/types.md` |
+| Writing security-sensitive code (SQL, passwords, CSRF, file upload, serialization) | `references/security.md` |
 
 ## Output Format
 
-When implementing a feature, deliver in this order:
-1. Domain models (entities, value objects, enums)
-2. Service / repository classes
-3. Controller / API endpoint
-4. Tests (PHPUnit or Pest)
-5. One-line explanation of key architecture decisions
+When producing code:
+
+1. A short plan (1–3 bullets) of what's changing.
+2. The code with `declare(strict_types=1);` and types everywhere.
+3. PHPStan passes at the project's configured level — mention if new `@phpstan-ignore` / `@param` annotations were added and why.
+
+When reviewing code: call out MUST-DO / MUST-NOT violations explicitly and suggest the minimal fix.

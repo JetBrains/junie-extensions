@@ -1,409 +1,63 @@
 ---
 name: java-engineer
-description: Java 21 language features, idioms, and coding standards. Use when writing Java code involving records, sealed classes, virtual threads, streams, or generics.
+description: Java 17–21 policy and pitfalls. Use when writing, reviewing, or refactoring Java code — enforces idioms around records, sealed types, switch exhaustiveness, Optional, virtual threads, and null-safety that LLMs frequently get wrong.
 ---
 
-# Java 21 — Language Features & Idioms
-
-## Records
-
-```java
-// Immutable data carrier — generates constructor, accessors, equals, hashCode, toString
-public record Money(BigDecimal amount, Currency currency) {
-    // Compact constructor for validation
-    public Money {
-        Objects.requireNonNull(amount);
-        if (amount.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("negative amount");
-    }
-
-    public Money add(Money other) {
-        if (!currency.equals(other.currency)) throw new IllegalArgumentException("currency mismatch");
-        return new Money(amount.add(other.amount), currency);
-    }
-}
-
-// Use records for DTOs and value objects — not for mutable JPA entities
-public record UserCreateRequest(
-    @NotBlank String email,
-    @NotBlank @Size(min = 8) String password
-) {}
-```
-
-## Sealed Classes & Pattern Matching
-
-```java
-// Sealed hierarchy — exhaustive, compiler-enforced
-public sealed interface PaymentResult
-    permits PaymentResult.Success, PaymentResult.Failure, PaymentResult.Pending {}
-
-public record Success(String transactionId) implements PaymentResult {}
-public record Failure(String reason, ErrorCode code) implements PaymentResult {}
-public record Pending(String referenceId) implements PaymentResult {}
-
-// Pattern matching switch — no default needed when all permits are handled
-String message = switch (result) {
-    case Success s  -> "Paid: " + s.transactionId();
-    case Failure f  -> "Failed: " + f.reason();
-    case Pending p  -> "Pending: " + p.referenceId();
-};
-
-// Pattern matching instanceof — eliminates explicit cast
-if (result instanceof Failure f && f.code() == ErrorCode.INSUFFICIENT_FUNDS) {
-    log.warn("Insufficient funds for reference {}", f.referenceId());
-}
-```
-
-## Switch Expressions
-
-```java
-// Arrow form — no fall-through, expression yields a value
-int discount = switch (customer.tier()) {
-    case GOLD    -> 20;
-    case SILVER  -> 10;
-    case BRONZE  -> 5;
-    default      -> 0;
-};
-
-// yield for multi-statement branches
-String label = switch (status) {
-    case ACTIVE -> "Active";
-    case INACTIVE -> {
-        log.debug("Inactive customer: {}", customer.id());
-        yield "Inactive";
-    }
-};
-```
-
-## Text Blocks
-
-```java
-String json = """
-        {
-            "name": "%s",
-            "email": "%s"
-        }
-        """.formatted(user.name(), user.email());
-
-String sql = """
-        SELECT u.id, u.email
-        FROM users u
-        WHERE u.active = true
-          AND u.created_at >= :since
-        ORDER BY u.created_at DESC
-        """;
-```
-
-## Virtual Threads (Java 21)
-
-```java
-// Structured concurrency — tasks live within the scope's lifetime
-try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-    Future<User>  user    = scope.fork(() -> userService.findById(userId));
-    Future<Order> order   = scope.fork(() -> orderService.findLatest(userId));
-
-    scope.join().throwIfFailed();
-
-    return new DashboardResponse(user.get(), order.get());
-}
-
-// Virtual thread executor — cheap, non-pinning I/O concurrency
-ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-```
-
-## Streams
-
-```java
-// Transform + filter + collect
-List<String> emails = users.stream()
-    .filter(User::isActive)
-    .map(User::email)
-    .toList();  // Unmodifiable list, Java 16+
-
-// Grouping
-Map<Department, List<Employee>> byDept = employees.stream()
-    .collect(Collectors.groupingBy(Employee::department));
-
-// FlatMap for nested collections
-List<String> allTags = posts.stream()
-    .flatMap(post -> post.tags().stream())
-    .distinct()
-    .toList();
-
-// Reduction
-BigDecimal total = items.stream()
-    .map(Item::price)
-    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-// ❌ Avoid complex nested streams — use loops for readability when logic exceeds 3 steps
-```
-
-## Optional
-
-```java
-// ✅ Return Optional from find* methods — signals "may be absent"
-Optional<User> user = userRepository.findByEmail(email);
-
-// ✅ Chain transformations
-return userRepository.findByEmail(email)
-    .map(UserResponse::from)
-    .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
-
-// ✅ Default value
-String displayName = user.map(User::displayName).orElse("Anonymous");
-
-// ❌ Never use Optional as method parameter or field — only as return type
-// ❌ Never call .get() without isPresent() check — use map/orElseThrow
-```
-
-## Generics & Type Safety
-
-```java
-// Bounded type parameter
-public <T extends Comparable<T>> T max(List<T> items) {
-    return items.stream().max(Comparator.naturalOrder())
-        .orElseThrow(() -> new IllegalArgumentException("empty list"));
-}
-
-// Wildcard for read-only collections
-public void printAll(List<? extends Shape> shapes) {
-    shapes.forEach(s -> System.out.println(s.area()));
-}
-
-// Generic repository pattern
-public interface Repository<T, ID> {
-    Optional<T> findById(ID id);
-    T save(T entity);
-    void deleteById(ID id);
-}
-
-// ❌ Avoid raw types — always declare type parameters
-```
-
-## Exceptions
-
-```java
-// Domain-specific unchecked exceptions
-public class ResourceNotFoundException extends RuntimeException {
-    public ResourceNotFoundException(String message) { super(message); }
-    public ResourceNotFoundException(String message, Throwable cause) { super(message, cause); }
-}
-
-// ✅ Wrap technical exceptions with context
-try {
-    return externalClient.fetch(id);
-} catch (HttpClientErrorException ex) {
-    throw new ResourceNotFoundException("External resource not found: " + id, ex);
-}
-
-// ✅ Fail fast — validate at boundaries
-public Order createOrder(CreateOrderRequest request) {
-    if (request.items().isEmpty()) throw new IllegalArgumentException("Order must have items");
-    // ...
-}
-
-// ❌ Avoid catching Exception broadly unless logging+rethrowing
-// ❌ Never swallow exceptions silently
-```
-
-## Naming & Style
-
-```java
-// Classes, Records, Interfaces: PascalCase
-public class OrderService {}
-public record Money(BigDecimal amount, Currency currency) {}
-public interface PaymentGateway {}
-
-// Methods, fields: camelCase
-private final UserRepository userRepository;
-public Optional<User> findByEmail(String email) {}
-
-// Constants: UPPER_SNAKE_CASE
-private static final int MAX_RETRY_ATTEMPTS = 3;
-private static final Duration TIMEOUT = Duration.ofSeconds(5);
-
-// Boolean methods: is/has/can prefix
-public boolean isActive() {}
-public boolean hasPermission(String role) {}
-```
-
-## Design Patterns
-
-Quick reference — choose the pattern that fits the problem.
-
-| Problem | Pattern | When |
-|---|---|---|
-| Many optional constructor params | **Builder** | 4+ params, some optional |
-| Create objects without knowing type | **Factory** | Type determined at runtime |
-| Swap algorithms at runtime | **Strategy** | Behavior varies by context |
-| Add behavior without subclassing | **Decorator** | Dynamic composition |
-| Notify many objects of changes | **Observer** | One-to-many dependency |
-| Wrap incompatible interface | **Adapter** | Legacy / third-party integration |
-
-```java
-// Builder — use Lombok @Builder or implement manually
-@Builder
-public class EmailMessage {
-    private final String to;       // required
-    private final String subject;  // required
-    private final String body;     // optional
-    private final List<String> cc; // optional
-}
-
-EmailMessage msg = EmailMessage.builder()
-    .to("user@example.com")
-    .subject("Welcome")
-    .body("Hello!")
-    .build();
-
-// Factory — hides concrete type, returns interface
-public interface NotificationSender {
-    void send(String message);
-}
-
-public class NotificationSenderFactory {
-    public static NotificationSender create(String channel) {
-        return switch (channel) {
-            case "email" -> new EmailSender();
-            case "sms"   -> new SmsSender();
-            case "push"  -> new PushSender();
-            default      -> throw new IllegalArgumentException("Unknown channel: " + channel);
-        };
-    }
-}
-
-// Strategy — inject behavior, swap without changing caller
-public interface PricingStrategy {
-    BigDecimal calculate(Order order);
-}
-
-@Service
-public class CheckoutService {
-    private final PricingStrategy pricing;
-
-    public CheckoutService(PricingStrategy pricing) { this.pricing = pricing; }
-
-    public BigDecimal checkout(Order order) {
-        return pricing.calculate(order);
-    }
-}
-
-// Observer — Spring ApplicationEvent is the idiomatic choice in Spring Boot apps
-// For plain Java, use functional observers:
-@FunctionalInterface
-public interface OrderListener {
-    void onOrderCreated(Order order);
-}
-
-public class OrderService {
-    private final List<OrderListener> listeners = new ArrayList<>();
-
-    public void addListener(OrderListener listener) { listeners.add(listener); }
-
-    public Order create(CreateOrderRequest request) {
-        Order order = /* persist */ new Order();
-        listeners.forEach(l -> l.onOrderCreated(order));
-        return order;
-    }
-}
-
-// Decorator — wrap to add behavior transparently
-public interface MessageSender {
-    void send(String message);
-}
-
-public class LoggingMessageSender implements MessageSender {
-    private final MessageSender delegate;
-
-    public LoggingMessageSender(MessageSender delegate) { this.delegate = delegate; }
-
-    @Override
-    public void send(String message) {
-        log.info("Sending message: length={}", message.length());
-        delegate.send(message);
-    }
-}
-```
-
-## Immutability
-
-```java
-// ✅ Final fields by default
-public class UserService {
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
-}
-
-// ✅ Unmodifiable collections
-private static final List<String> ALLOWED_ROLES = List.of("ADMIN", "USER", "MODERATOR");
-
-// ✅ Copy on intake to prevent aliasing
-public Order(List<OrderItem> items) {
-    this.items = List.copyOf(items);
-}
-```
-
-## Logging
-
-```java
-private static final Logger log = LoggerFactory.getLogger(OrderService.class);
-
-// ✅ Structured — stable field names, parameterized
-log.info("order_created orderId={} customerId={} total={}", order.id(), order.customerId(), order.total());
-log.warn("payment_failed orderId={} reason={}", orderId, reason);
-log.error("unexpected_error orderId={}", orderId, ex);  // exception as last arg
-
-// ❌ Never log PII (emails, phone, address), tokens, or raw passwords
-// ❌ No string concatenation in log calls — always use parameterized form
-```
-
-## Null Handling
-
-```java
-// ✅ Use @NonNull / @Nullable to document intent at API boundaries
-public UserResponse findById(@NonNull Long id) { ... }
-public @Nullable String getNickname() { ... }
-
-// ✅ Validate parameters early
-public void process(@NonNull Order order, @NonNull String currency) {
-    Objects.requireNonNull(order, "order must not be null");
-    Objects.requireNonNull(currency, "currency must not be null");
-}
-```
-
-## Code Smells to Avoid
-
-- Long parameter lists → use a request record or builder
-- Deep nesting → early returns and guard clauses
-- Magic numbers/strings → named constants
-- Static mutable state → dependency injection
-- Silent catch blocks → log and rethrow or convert to domain exception
-- `instanceof` chains → sealed classes with switch
-
-## Testing Standards
-
-```java
-// JUnit 5 + AssertJ
-@Test
-void shouldRejectNegativeAmount() {
-    assertThatThrownBy(() -> new Money(new BigDecimal("-1"), Currency.getInstance("USD")))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("negative amount");
-}
-
-@Test
-void shouldAddMoneyOfSameCurrency() {
-    Money a = new Money(new BigDecimal("10.00"), Currency.getInstance("USD"));
-    Money b = new Money(new BigDecimal("5.50"), Currency.getInstance("USD"));
-
-    assertThat(a.add(b).amount()).isEqualByComparingTo("15.50");
-}
-```
-
-- Mockito for dependencies; avoid partial mocks (spy) unless unavoidable
-- Test method names: `should<ExpectedBehavior>[When<Condition>]`
-- One assertion focus per test — multiple `assertThat` on the same result is fine
+# Java — policy & pitfalls
+
+Baseline knowledge of the Java language (records, sealed, pattern matching, text blocks, streams, `var`, generics, Optional API) is assumed — this skill does not teach the language. It encodes the project policy and the traps that keep appearing in code review.
+
+## Setup Check (run first)
+
+Before writing non-trivial code, verify:
+
+1. **JDK version** — `java --version`, and target version in `pom.xml` (`<maven.compiler.release>`) or `build.gradle(.kts)` (`java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }`). Adjust feature use if < 17. Current LTS: Java 21; Java 25 is the next LTS (2025). Prefer LTS releases for new projects.
+2. **Build tool wrapper** — use `./mvnw` / `./gradlew`, never a globally installed `mvn` / `gradle`.
+3. **Lombok** — look for `lombok` in dependencies. If present, prefer `@RequiredArgsConstructor` / `@Slf4j` / `@Builder`; if absent, do not introduce Lombok unless asked.
+4. **Static analysis** — `error-prone`, `checkstyle`, `spotbugs`, `pmd`. Respect existing rules; do not add new violations.
+5. **Preview features** — if build uses `--enable-preview`, some features behave differently. Check flag before relying on preview syntax.
+
+## MUST DO
+
+- **`Optional` is a return type only.** Never a parameter, field, or element of a collection.
+- **Value classes → `record`.** DTOs, events, results, config snapshots. Not JPA entities (records are final and have no no-arg constructor).
+- **Closed hierarchies → `sealed`** + exhaustive `switch`. Compiler catches new cases.
+- **`switch` expression over `if / else if` chains.** Pattern-matching `switch` over `instanceof` chains.
+- **Fields `final`** unless you have a reason to reassign.
+- **Fail fast at boundaries** — `Objects.requireNonNull` in public-API constructors; validate invariants in record compact constructors.
+- **`try-with-resources`** for anything `AutoCloseable` — including `ExecutorService` (Java 19+).
+- **Virtual threads for blocking I/O** (`Executors.newVirtualThreadPerTaskExecutor()`). Not for CPU-bound work.
+- **Structured concurrency** for multi-call fan-out: `try (var scope = new StructuredTaskScope.ShutdownOnFailure()) { ... }`.
+- **Parameterized logging**: `log.info("user_updated userId={} status={}", id, status)`.
+
+## MUST NOT DO
+
+- **No `Optional.get()`** without prior `isPresent()` — use `.map(...).orElseThrow(...)` or `.orElse(default)`.
+- **No raw types** (`List` instead of `List<Foo>`), no `@SuppressWarnings("rawtypes")` to silence warnings.
+- **No returning `null` from a collection-returning method.** Return `List.of()` / `Collections.emptyList()`.
+- **No checked exceptions leaking into `Stream` / lambda**. Wrap into an unchecked domain exception at the boundary.
+- **No catching `Exception` / `Throwable`** to "make the compiler happy". Handle a specific type or propagate.
+- **No mutating input collections.** Make a defensive copy: `List.copyOf(input)`.
+- **No `synchronized` around a blocking call on a virtual thread** — it pins the carrier thread. Use `ReentrantLock`.
+- **No `Thread.sleep` / blocking I/O on `parallelStream()`** — shared common pool, starves other work.
+- **No mutation of `Stream.toList()` result** — it's unmodifiable (JDK 16+).
+- **No PII / tokens / raw passwords in logs.**
+
+## Reference Guide
+
+| Load when | File |
+|---|---|
+| Debugging subtle language / API behavior (Optional, Stream, switch, records, generics) | `references/pitfalls.md` |
+| Records, sealed hierarchies, pattern-matching switch, preview features (pitfalls & traps, not syntax tutorials) | `references/modern-java.md` |
+| Writing concurrent code (virtual threads, structured concurrency, `ExecutorService` lifecycle, `ThreadLocal` traps) | `references/concurrency.md` |
+| File / stream / socket I/O, charsets, partial reads, NIO buffers | `references/io.md` |
+
+## Output Format
+
+When producing code:
+
+1. A short plan (1–3 bullets) of what's changing.
+2. The code.
+3. A checklist of the non-obvious MUST rules applied.
+
+When reviewing code: call out MUST-DO / MUST-NOT violations explicitly and suggest the minimal fix.

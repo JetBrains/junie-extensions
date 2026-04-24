@@ -1,430 +1,84 @@
-# Data Access - Spring Data JPA
-
-## JPA Entity Pattern
-
-```java
-@Entity
-@Table(name = "users", indexes = {
-    @Index(name = "idx_email", columnList = "email", unique = true),
-    @Index(name = "idx_username", columnList = "username")
-})
-@EntityListeners(AuditingEntityListener.class)
-@Getter @Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, unique = true, length = 100)
-    private String email;
-
-    @Column(nullable = false, length = 100)
-    private String password;
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean active = true;
-
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<Address> addresses = new ArrayList<>();
-
-    @ManyToMany
-    @JoinTable(
-        name = "user_roles",
-        joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    @Builder.Default
-    private Set<Role> roles = new HashSet<>();
-
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @LastModifiedDate
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
-
-    @Version
-    private Long version;
-
-    // Helper methods for bidirectional relationships
-    public void addAddress(Address address) {
-        addresses.add(address);
-        address.setUser(this);
-    }
-
-    public void removeAddress(Address address) {
-        addresses.remove(address);
-        address.setUser(null);
-    }
-}
-```
-
-## Spring Data JPA Repository
-
-```java
-@Repository
-public interface UserRepository extends JpaRepository<User, Long>,
-                                       JpaSpecificationExecutor<User> {
-
-    Optional<User> findByEmail(String email);
-
-    Optional<User> findByUsername(String username);
-
-    boolean existsByEmail(String email);
-
-    boolean existsByUsername(String username);
-
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.email = :email")
-    Optional<User> findByEmailWithRoles(@Param("email") String email);
-
-    @Query("SELECT u FROM User u WHERE u.active = true AND u.createdAt >= :since")
-    List<User> findActiveUsersSince(@Param("since") LocalDateTime since);
-
-    @Modifying
-    @Query("UPDATE User u SET u.active = false WHERE u.lastLoginAt < :threshold")
-    int deactivateInactiveUsers(@Param("threshold") LocalDateTime threshold);
-
-    // Projection for read-only DTOs
-    @Query("SELECT new com.example.dto.UserSummary(u.id, u.username, u.email) " +
-           "FROM User u WHERE u.active = true")
-    List<UserSummary> findAllActiveSummaries();
-}
-```
-
-## Repository with Specifications
-
-```java
-public class UserSpecifications {
-
-    public static Specification<User> hasEmail(String email) {
-        return (root, query, cb) ->
-            email == null ? null : cb.equal(root.get("email"), email);
-    }
-
-    public static Specification<User> isActive() {
-        return (root, query, cb) -> cb.isTrue(root.get("active"));
-    }
-
-    public static Specification<User> createdAfter(LocalDateTime date) {
-        return (root, query, cb) ->
-            date == null ? null : cb.greaterThanOrEqualTo(root.get("createdAt"), date);
-    }
-
-    public static Specification<User> hasRole(String roleName) {
-        return (root, query, cb) -> {
-            Join<User, Role> roles = root.join("roles", JoinType.INNER);
-            return cb.equal(roles.get("name"), roleName);
-        };
-    }
-}
-
-// Usage in service
-@Service
-@RequiredArgsConstructor
-public class UserService {
-    private final UserRepository userRepository;
-
-    public Page<User> searchUsers(UserSearchCriteria criteria, Pageable pageable) {
-        Specification<User> spec = Specification
-            .where(UserSpecifications.hasEmail(criteria.email()))
-            .and(UserSpecifications.isActive())
-            .and(UserSpecifications.createdAfter(criteria.createdAfter()));
-
-        return userRepository.findAll(spec, pageable);
-    }
-}
-```
-
-## Transaction Management
-
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class OrderService {
-    private final OrderRepository orderRepository;
-    private final PaymentService paymentService;
-    private final InventoryService inventoryService;
-    private final NotificationService notificationService;
-
-    @Transactional
-    public Order createOrder(OrderCreateRequest request) {
-        // All operations in single transaction
-        Order order = Order.builder()
-            .customerId(request.customerId())
-            .status(OrderStatus.PENDING)
-            .build();
-
-        request.items().forEach(item -> {
-            inventoryService.reserveStock(item.productId(), item.quantity());
-            order.addItem(item);
-        });
-
-        order = orderRepository.save(order);
-
-        try {
-            paymentService.processPayment(order);
-            order.setStatus(OrderStatus.PAID);
-        } catch (PaymentException e) {
-            order.setStatus(OrderStatus.PAYMENT_FAILED);
-            throw e; // Transaction will rollback
-        }
-
-        return orderRepository.save(order);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void logOrderEvent(Long orderId, String event) {
-        // Separate transaction - will commit even if parent rolls back
-        OrderEvent orderEvent = new OrderEvent(orderId, event);
-        orderEventRepository.save(orderEvent);
-    }
-
-    @Transactional(noRollbackFor = NotificationException.class)
-    public void completeOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
-        order.setStatus(OrderStatus.COMPLETED);
-        orderRepository.save(order);
-
-        // Won't rollback transaction if notification fails
-        try {
-            notificationService.sendCompletionEmail(order);
-        } catch (NotificationException e) {
-            log.error("Failed to send notification for order {}", orderId, e);
-        }
-    }
-}
-```
-
-## Auditing Configuration
-
-```java
-@Configuration
-@EnableJpaAuditing
-public class JpaAuditingConfig {
-
-    @Bean
-    public AuditorAware<String> auditorProvider() {
-        return () -> {
-            Authentication authentication = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-
-            if (authentication == null || !authentication.isAuthenticated()) {
-                return Optional.of("system");
-            }
-
-            return Optional.of(authentication.getName());
-        };
-    }
-}
-
-@MappedSuperclass
-@EntityListeners(AuditingEntityListener.class)
-@Getter @Setter
-public abstract class AuditableEntity {
-
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @CreatedBy
-    @Column(nullable = false, updatable = false, length = 100)
-    private String createdBy;
-
-    @LastModifiedDate
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
-
-    @LastModifiedBy
-    @Column(nullable = false, length = 100)
-    private String updatedBy;
-}
-```
-
-## Projections
-
-```java
-// Interface-based projection
-public interface UserSummary {
-    Long getId();
-    String getUsername();
-    String getEmail();
-
-    @Value("#{target.firstName + ' ' + target.lastName}")
-    String getFullName();
-}
-
-// Class-based projection (DTO)
-public record UserSummaryDto(
-    Long id,
-    String username,
-    String email
-) {}
-
-// Usage
-public interface UserRepository extends JpaRepository<User, Long> {
-    List<UserSummary> findAllBy();
-
-    <T> List<T> findAllBy(Class<T> type);
-}
-
-// Service usage
-List<UserSummary> summaries = userRepository.findAllBy();
-List<UserSummaryDto> dtos = userRepository.findAllBy(UserSummaryDto.class);
-```
-
-## Query Optimization
-
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class UserQueryService {
-    private final UserRepository userRepository;
-    private final EntityManager entityManager;
-
-    // N+1 problem solved with JOIN FETCH
-    @Query("SELECT DISTINCT u FROM User u " +
-           "LEFT JOIN FETCH u.addresses " +
-           "LEFT JOIN FETCH u.roles " +
-           "WHERE u.active = true")
-    List<User> findAllActiveWithAssociations();
-
-    // Batch fetching
-    @BatchSize(size = 25)
-    @OneToMany(mappedBy = "user")
-    private List<Order> orders;
-
-    // EntityGraph for dynamic fetching
-    @EntityGraph(attributePaths = {"addresses", "roles"})
-    List<User> findAllByActiveTrue();
-
-    // Pagination to avoid loading all data
-    public Page<User> findAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable);
-    }
-
-    // Native query for complex queries
-    @Query(value = """
-        SELECT u.* FROM users u
-        INNER JOIN orders o ON u.id = o.user_id
-        WHERE o.created_at >= :since
-        GROUP BY u.id
-        HAVING COUNT(o.id) >= :minOrders
-        """, nativeQuery = true)
-    List<User> findFrequentBuyers(@Param("since") LocalDateTime since,
-                                  @Param("minOrders") int minOrders);
-}
-```
-
-## Connection Pool (HikariCP)
-
-HikariCP is the default pool in Spring Boot. Always configure it explicitly for production:
-
-```yaml
-spring:
-  datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/mydb}
-    username: ${DATABASE_USER}
-    password: ${DATABASE_PASSWORD}
-    hikari:
-      maximum-pool-size: 10       # default 10 — tune based on DB capacity
-      minimum-idle: 5
-      connection-timeout: 20000   # ms to wait for connection (default 30s)
-      idle-timeout: 600000        # ms before idle connection removed
-      max-lifetime: 1800000       # ms max connection lifetime (< DB wait_timeout)
-      leak-detection-threshold: 60000  # warn if connection held > 60s
-
-  jpa:
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 20          # enable JDBC batching
-        order_inserts: true       # group inserts by type for better batching
-        order_updates: true
-    open-in-view: false           # always disable — avoids lazy-loading in web layer
-```
-
-## Streaming Large Datasets
-
-Use `Stream` to process large result sets without loading everything into memory:
-
-```java
-@Transactional(readOnly = true)
-public void exportUsers(OutputStream out) {
-    try (Stream<User> stream = userRepository.streamByActiveTrue()) {
-        stream.forEach(user -> writeCsv(out, user));
-    }
-    // Stream MUST be closed — always use try-with-resources
-}
-
-// Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    Stream<User> streamByActiveTrue();
-}
-```
-
-> **Rule**: `Stream`-returning repository methods must be called inside a `@Transactional` method and closed explicitly.
-
-## Database Migrations (Flyway)
-
-```sql
--- V1__create_users_table.sql
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version BIGINT NOT NULL DEFAULT 0
-);
-
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_active ON users(active);
-
--- V2__create_addresses_table.sql
-CREATE TABLE addresses (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    street VARCHAR(200) NOT NULL,
-    city VARCHAR(100) NOT NULL,
-    country VARCHAR(2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_addresses_user_id ON addresses(user_id);
-```
-
-## Quick Reference
-
-| Annotation | Purpose |
-|------------|---------|
-| `@Entity` | Marks class as JPA entity |
-| `@Table` | Specifies table details and indexes |
-| `@Id` | Marks primary key field |
-| `@GeneratedValue` | Auto-generated primary key strategy |
-| `@Column` | Column constraints and mapping |
-| `@OneToMany/@ManyToOne` | One-to-many/many-to-one relationships |
-| `@ManyToMany` | Many-to-many relationships |
-| `@JoinColumn/@JoinTable` | Join column/table configuration |
-| `@Transactional` | Declares transaction boundaries |
-| `@Query` | Custom JPQL/native queries |
-| `@Modifying` | Marks query as UPDATE/DELETE |
-| `@EntityGraph` | Defines fetch graph for associations |
-| `@Version` | Optimistic locking version field |
+# Data Access — policy & pitfalls
+
+Generic JPA / Spring Data knowledge (`JpaRepository`, `@Query`, derived queries, `@Entity`, `@OneToMany`) is assumed. This file covers the decisions that actually break production apps.
+
+## Must-fix config
+
+- **Always set `spring.jpa.open-in-view=false`.** The default is `true`, which keeps the Hibernate `Session` open for the entire HTTP request. This hides lazy-loading bugs, holds a DB connection under load, and is the single biggest cause of slow Spring apps.
+- `spring.jpa.hibernate.ddl-auto=validate` in prod (never `update` / `create`). Use Flyway / Liquibase for schema changes.
+- Log SQL in dev only (`spring.jpa.show-sql=false` or use `spring.jpa.properties.hibernate.format_sql=true` with `logging.level.org.hibernate.SQL=DEBUG`). Production with `show-sql=true` destroys throughput.
+
+## Transactions — read this before writing `@Transactional`
+
+- **Self-invocation doesn't start a transaction.** `this.methodA()` calling `this.methodB()` where only `methodB` has `@Transactional` — the proxy is bypassed, no transaction begins. Fix: extract to a separate bean, or inject `self` via `@Lazy`.
+- `@Transactional` works only on **`public` non-`final` methods** of a Spring bean. Private / package-private / final / static → silently ignored. Kotlin: the `kotlin-spring` plugin opens classes so CGLIB proxies work.
+- **Checked exceptions do not roll back by default.** Only `RuntimeException` and `Error` do. For checked exceptions: `@Transactional(rollbackFor = Exception.class)` (or a tighter superclass).
+- `@Transactional(readOnly = true)` on queries — lets Hibernate skip dirty checking and flushes. **Never write inside `readOnly = true`** — the flush is skipped silently, updates disappear.
+- `@Async` + `@Transactional` on the same method: the async thread doesn't inherit transaction context. Entity becomes detached → `LazyInitializationException`. Split: sync method opens tx, async method runs outside it (or use `@TransactionalEventListener(phase = AFTER_COMMIT)`).
+- `@Transactional` on `@PostConstruct` is ignored — proxy isn't ready yet.
+- Long-running transactions are an anti-pattern. Keep `@Transactional` blocks short; do network calls / external HTTP **outside** the transaction.
+
+## N+1 queries — the default killer
+
+Default `@OneToMany` / `@ManyToOne` are lazy. Iterating a list and touching a lazy association = one query per entity.
+
+Fixes (pick one, in order of preference):
+
+1. **Projection interface / DTO query** — select only what you need, no entities:
+   ```java
+   interface UserView { String getName(); String getEmail(); }
+   List<UserView> findBy();
+   ```
+2. **`@EntityGraph`** on the repository method — declarative, per-query:
+   ```java
+   @EntityGraph(attributePaths = {"orders", "orders.items"})
+   List<User> findAll();
+   ```
+3. **`JOIN FETCH`** in JPQL when EntityGraph isn't flexible enough:
+   ```java
+   @Query("select u from User u join fetch u.orders where u.active = true")
+   List<User> findActiveWithOrders();
+   ```
+
+Never solve N+1 with `FetchType.EAGER` on the entity — it pollutes every query, not just the one that needs it.
+
+Detection: enable `spring.jpa.properties.hibernate.generate_statistics=true` + `logging.level.org.hibernate.stat=DEBUG` in dev, or use Hypersistence Utils / Datasource Proxy to log query counts per request.
+
+## Pagination + fetch join
+
+`@Query("... join fetch ...")` + `Pageable` together emits `HHH90003004` ("firstResult/maxResults specified with collection fetch; applying in memory") — Hibernate loads **the entire collection** and paginates in Java. Two-step fix:
+
+1. Page IDs: `@Query("select u.id from User u") Page<Long> pageIds(Pageable p);`
+2. Fetch entities for that page: `@Query("select u from User u join fetch u.orders where u.id in :ids") List<User> findByIds(List<Long> ids);`
+
+## Entity hygiene
+
+- `equals` / `hashCode` based on `id` is unsafe before `persist()` (id is null). For JPA entities prefer a business key, or use `Objects.hash(getClass())` + id-aware equals that handles null.
+- `@GeneratedValue(strategy = GenerationType.IDENTITY)` disables Hibernate's JDBC batch inserts. For bulk inserts use `SEQUENCE` + `hibernate.jdbc.batch_size=50` + `hibernate.order_inserts=true` / `order_updates=true`.
+- **Hibernate 7 (Boot 4)**: `hibernate-jpamodelgen` annotation processor replaced by `hibernate-processor`. Update your `pom.xml` / `build.gradle.kts` accordingly; the old artifact produces compile errors.
+- Bidirectional `@OneToMany` + `@ManyToOne`: manage both sides in helper methods (`addOrder(order) { orders.add(order); order.setUser(this); }`). Forgetting one side → dangling FKs on flush.
+- Kotlin entities require `kotlin-jpa` plugin (generates no-arg constructor). Without it: `InstantiationException: No default constructor for entity`.
+
+## Repository patterns
+
+- Use interface projections for read-only queries; Spring builds the proxy automatically.
+- `Specification<T>` for dynamic filters (search forms) instead of concatenating JPQL.
+- Derived query methods (`findByEmailAndActiveTrue`) stay readable up to ~3 conditions; beyond that, switch to `@Query` or `Specification`.
+- `@Modifying @Query("update ...")` requires `clearAutomatically = true` (or manual `em.clear()`) — otherwise stale entities remain in the persistence context and subsequent reads see the pre-update state.
+
+## Connection pool (HikariCP defaults rarely fit prod)
+
+- Default `maximum-pool-size=10`. The classic `pool = ((core_count * 2) + effective_spindle_count)` is a **DB-side capacity ceiling** (Brecht / PgBouncer guidance for how many concurrent connections the database can serve efficiently), **not** a prescription for the app pool size. Per app-instance pool is usually 10–30; across all instances stay under the DB ceiling. More connections ≠ more throughput — context switching and lock contention dominate past the ceiling.
+- Always set `spring.datasource.hikari.connection-timeout` (default 30s) and `max-lifetime` (shorter than DB/proxy idle timeout).
+- Leak detection in non-prod: `spring.datasource.hikari.leak-detection-threshold=5000`.
+
+## Cheat table — common errors and their cause
+
+| Error / symptom | Typical cause |
+|---|---|
+| `LazyInitializationException` | Accessing lazy association outside transaction (and OSIV is off, which is correct). Fetch it eagerly via `EntityGraph` / `JOIN FETCH` / projection. |
+| `could not initialize proxy - no Session` | Same as above. |
+| Update "runs" but nothing changes in DB | Called from another method in the same bean (self-invocation); or inside `readOnly = true`; or inside `@Async` method without proper tx propagation. |
+| `HHH90003004` in logs, slow pagination | `JOIN FETCH` + `Pageable` together. Use two-step ID paging. |
+| Mysterious `OptimisticLockException` on every save | Missing `@Version` column but concurrent updates; or entity re-attached from a cache without refreshing version. |
+| `InstantiationException: No default constructor` | Kotlin `@Entity` without `kotlin-jpa` plugin. |

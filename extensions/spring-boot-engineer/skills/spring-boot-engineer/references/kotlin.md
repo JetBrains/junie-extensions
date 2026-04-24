@@ -1,93 +1,71 @@
-# Kotlin — Spring Boot Patterns
+# Kotlin + Spring Boot — policy & pitfalls
 
-## Controller
+Generic Kotlin / Spring knowledge is assumed (constructor injection, `data class`, `@RestController`). This file is the Kotlin-specific traps when using Spring.
 
+## Required compiler plugins
+
+| Plugin | Why |
+|---|---|
+| `kotlin("plugin.spring")` | Opens classes annotated with `@Component`, `@Service`, `@Configuration`, `@Transactional`, `@Async`, `@Cacheable`, `@SpringBootTest` — otherwise CGLIB proxies fail (Kotlin classes are `final` by default). |
+| `kotlin("plugin.jpa")` | Generates a no-arg constructor for `@Entity`, `@Embeddable`, `@MappedSuperclass`. Without it: `InstantiationException: No default constructor for entity`. |
+
+Also ensure `kotlin-reflect` is on the classpath (transitive from `spring-boot-starter`).
+
+If you use MapStruct / custom annotations that require opening a class for proxying, add them to `allOpen` yourself:
 ```kotlin
-@RestController
-@RequestMapping("/api/v1/users")
-class UserController(private val userService: UserService) {
-
-    @GetMapping
-    fun getAll(): List<UserResponse> = userService.findAll()
-
-    @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): ResponseEntity<UserResponse> =
-        ResponseEntity.ok(userService.findById(id))
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    fun create(@Valid @RequestBody request: CreateUserRequest): UserResponse =
-        userService.create(request)
-
-    @PutMapping("/{id}")
-    fun update(@PathVariable id: Long, @Valid @RequestBody request: UpdateUserRequest): UserResponse =
-        userService.update(id, request)
-
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun delete(@PathVariable id: Long) = userService.delete(id)
+allOpen {
+    annotation("com.example.MyProxiedAnnotation")
 }
 ```
 
-## Service (constructor injection — no @RequiredArgsConstructor needed)
+## Bean Validation — `@field:` is mandatory
 
 ```kotlin
-@Service
-@Transactional(readOnly = true)
-class UserService(
-    private val userRepository: UserRepository,
-    private val userMapper: UserMapper,
-) {
-    fun findAll(): List<UserResponse> = userRepository.findAll().map(userMapper::toResponse)
+// ❌ Silently ignored — annotation targets constructor parameter, not backing field
+data class Request(@NotBlank val name: String)
 
-    fun findById(id: Long): UserResponse =
-        userRepository.findById(id)
-            .map(userMapper::toResponse)
-            .orElseThrow { ResourceNotFoundException("User", id) }
+// ✅ Targets the field — Jakarta Validation picks it up
+data class Request(@field:NotBlank val name: String)
+```
 
-    @Transactional
-    fun create(request: CreateUserRequest): UserResponse {
-        val user = userMapper.toEntity(request)
-        return userMapper.toResponse(userRepository.save(user))
-    }
+Same rule for `@NotNull`, `@Size`, `@Email`, `@Pattern`, `@Min`, `@Max`, `@Valid` on nested properties.
 
-    @Transactional
-    fun delete(id: Long) {
-        if (!userRepository.existsById(id)) throw ResourceNotFoundException("User", id)
-        userRepository.deleteById(id)
-    }
+## JPA entities in Kotlin
+
+- Use a regular `class` (not `data class`) for `@Entity`. `data class` generates `equals` / `hashCode` / `toString` from all properties, which breaks on lazy associations (triggers loading) and on null IDs (every unsaved instance is "equal").
+- `id` as `Long?` with default `null` — JPA assigns on flush.
+- Mutable fields: `var`, nullable only where the column is nullable. Don't make everything `var` "to be safe" — it blows up encapsulation.
+- No `companion object` with `toEntity` / `fromEntity` helpers on the entity itself — put mapping in a dedicated mapper class / extension functions. Keeps entity free of transitive dependencies.
+
+## Coroutine controllers (WebFlux only, not MVC)
+
+Suspend functions work in `@RestController` only when the app runs on WebFlux. In plain MVC they silently return `CompletableFuture` of the continuation — not what you want.
+
+```kotlin
+@GetMapping("/{id}")
+suspend fun getById(@PathVariable id: Long): UserResponse = service.findById(id)
+
+@GetMapping
+fun stream(): Flow<UserResponse> = service.findAll()
+```
+
+- `Flow<T>` as return type → streamed response (analogous to `Flux<T>`).
+- For parallel fan-out inside a handler use `coroutineScope { async { ... } }` — never `GlobalScope`.
+- Blocking calls inside a `suspend` handler must be wrapped: `withContext(Dispatchers.IO) { blockingCall() }`.
+
+## R2DBC + Coroutines
+
+```kotlin
+interface UserRepository : CoroutineCrudRepository<User, Long> {
+    suspend fun findByEmail(email: String): User?
+    fun findActive(): Flow<User>
 }
 ```
 
-## DTOs — use `@field:` prefix for Bean Validation
+- `CoroutineCrudRepository` returns `suspend` / `Flow` instead of `Mono` / `Flux`.
+- `@Transactional` on a `suspend` method requires `ReactiveTransactionManager` (auto-wired when R2DBC is on classpath). Works, but don't mix with JPA in the same app.
 
-```kotlin
-// Request DTO
-data class CreateUserRequest(
-    @field:NotBlank(message = "Name is required")
-    @field:Size(min = 2, max = 100)
-    val name: String,
-
-    @field:Email(message = "Invalid email format")
-    @field:NotBlank
-    val email: String,
-
-    @field:Min(18)
-    val age: Int,
-)
-
-// Response DTO — immutable data class
-data class UserResponse(
-    val id: Long,
-    val name: String,
-    val email: String,
-    val createdAt: LocalDateTime,
-)
-```
-
-> **Rule**: Always use `@field:` in Kotlin data classes. Without it, the annotation targets the constructor parameter, not the backing field — Bean Validation silently skips it.
-
-## Configuration Properties
+## `@ConfigurationProperties` in Kotlin
 
 ```kotlin
 @ConfigurationProperties(prefix = "app.jwt")
@@ -98,97 +76,13 @@ data class JwtProperties(
 )
 ```
 
-## Entity
+- Enable with `@EnableConfigurationProperties(JwtProperties::class)` on a `@Configuration` class, or annotate the properties class itself with `@ConfigurationPropertiesScan` on the main app class.
+- With Kotlin's immutable `val` properties, Spring binds via the canonical constructor — no setters needed. This is the recommended style.
 
-```kotlin
-@Entity
-@Table(name = "users")
-class User(
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,           // nullable — assigned by DB
+## Common mistakes
 
-    @Column(nullable = false)
-    var name: String,
-
-    @Column(nullable = false, unique = true)
-    var email: String,
-)
-```
-
-> Prefer mutable `var` for fields JPA needs to set. Keep `id` as `Long?` and never set it manually.
-
-## Anti-Patterns
-
-```kotlin
-// ❌ lateinit for repository — use constructor injection
-@Service
-class UserService {
-    @Autowired lateinit var userRepository: UserRepository  // Bad
-}
-
-// ✅ constructor injection
-@Service
-class UserService(private val userRepository: UserRepository)
-
-// ❌ @NotBlank without @field: — silently ignored
-data class Request(@NotBlank val name: String)
-
-// ✅
-data class Request(@field:NotBlank val name: String)
-```
-
----
-
-## Kotlin + Coroutines (WebFlux)
-
-> For reactive Spring WebFlux with coroutines, see `references/reactive.md` → Kotlin section.
-
-### Suspend Controller (WebFlux only)
-
-```kotlin
-@RestController
-@RequestMapping("/api/v1/users")
-class UserController(private val userService: UserService) {
-
-    @GetMapping
-    fun getAll(): Flow<UserResponse> = userService.findAll()
-
-    @GetMapping("/{id}")
-    suspend fun getById(@PathVariable id: Long): UserResponse = userService.findById(id)
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    suspend fun create(@Valid @RequestBody request: CreateUserRequest): UserResponse =
-        userService.create(request)
-}
-```
-
-### Coroutine Repository (R2DBC)
-
-```kotlin
-interface UserRepository : CoroutineCrudRepository<User, Long> {
-    suspend fun findByEmail(email: String): User?
-    fun findByActiveTrue(): Flow<User>
-}
-```
-
-### Parallel Calls with coroutineScope
-
-```kotlin
-suspend fun getDashboard(userId: Long): DashboardResponse = coroutineScope {
-    val user    = async { userService.findById(userId) }
-    val orders  = async { orderService.findByUser(userId) }
-    val balance = async { accountService.getBalance(userId) }
-    DashboardResponse(user.await(), orders.await(), balance.await())
-}
-```
-
-### Blocking Code — use Dispatchers.IO
-
-```kotlin
-// ❌ Never block on the WebFlux event loop
-suspend fun bad(): String = File("data.txt").readText()
-
-// ✅ Offload to IO dispatcher
-suspend fun good(): String = withContext(Dispatchers.IO) { File("data.txt").readText() }
-```
+- `@Autowired lateinit var` field injection → untestable, bypasses nullability. Always constructor injection.
+- `data class` for a JPA entity → broken `equals` / `hashCode` → weird Set / cache behavior.
+- `@Transactional` on a `final` class (default Kotlin) without `kotlin-spring` plugin → annotation silently ignored.
+- Forgetting `@field:` on DTO validation → validation "works in tests with `Validator.validate(...)`" but is bypassed at the controller boundary (different target resolution).
+- Using `runBlocking` inside a controller to call `suspend` code from MVC — blocks the servlet thread and defeats the point of coroutines. Either go full WebFlux or keep it synchronous.

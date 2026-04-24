@@ -1,459 +1,80 @@
-# Security - Spring Security 6
-
-## Security Configuration
-
-```java
-@Configuration
-@EnableWebSecurity
-@EnableMethodSecurity
-public class SecurityConfig {
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/auth/**")
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-            )
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/users/**").hasAnyRole("USER", "ADMIN")
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-            .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(authenticationEntryPoint())
-                .accessDeniedHandler(accessDeniedHandler())
-            )
-            .addFilterBefore(jwtAuthenticationFilter(),
-                           UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
-    }
-}
-```
-
-## JWT Authentication Filter
-
-```java
-@Component
-@RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
-
-    @Override
-    protected void doFilterInternal(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletRequest response,
-            @NonNull FilterChain filterChain) throws ServletException, IOException {
-
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String username;
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        jwt = authHeader.substring(7);
-
-        try {
-            username = jwtService.extractUsername(jwt);
-
-            if (username != null && SecurityContextHolder.getContext()
-                    .getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-                if (jwtService.isTokenValid(jwt, userDetails)) {
-                    UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
-                        );
-
-                    authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
-
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                }
-            }
-        } catch (JwtException e) {
-            log.error("JWT validation failed", e);
-        }
-
-        filterChain.doFilter(request, response);
-    }
-}
-```
-
-## JWT Service
-
-```java
-@Service
-public class JwtService {
-    @Value("${jwt.secret}")
-    private String secretKey;
-
-    @Value("${jwt.expiration}")
-    private long jwtExpiration;
-
-    @Value("${jwt.refresh-expiration}")
-    private long refreshExpiration;
-
-    public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
-    }
-
-    public String generateToken(UserDetails userDetails) {
-        Map<String, Object> extraClaims = new HashMap<>();
-        extraClaims.put("roles", userDetails.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .collect(Collectors.toList()));
-
-        return generateToken(extraClaims, userDetails);
-    }
-
-    public String generateToken(
-            Map<String, Object> extraClaims,
-            UserDetails userDetails) {
-        return buildToken(extraClaims, userDetails, jwtExpiration);
-    }
-
-    public String generateRefreshToken(UserDetails userDetails) {
-        return buildToken(new HashMap<>(), userDetails, refreshExpiration);
-    }
-
-    private String buildToken(
-            Map<String, Object> extraClaims,
-            UserDetails userDetails,
-            long expiration) {
-        return Jwts
-            .builder()
-            .setClaims(extraClaims)
-            .setSubject(userDetails.getUsername())
-            .setIssuedAt(new Date(System.currentTimeMillis()))
-            .setExpiration(new Date(System.currentTimeMillis() + expiration))
-            .signWith(getSignInKey(), SignatureAlgorithm.HS256)
-            .compact();
-    }
-
-    public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
-    }
-
-    private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
-    private Claims extractAllClaims(String token) {
-        return Jwts
-            .parserBuilder()
-            .setSigningKey(getSignInKey())
-            .build()
-            .parseClaimsJws(token)
-            .getBody();
-    }
-
-    private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
-    }
-}
-```
-
-## UserDetailsService Implementation
-
-```java
-@Service
-@RequiredArgsConstructor
-public class CustomUserDetailsService implements UserDetailsService {
-    private final UserRepository userRepository;
-
-    @Override
-    @Transactional(readOnly = true)
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByEmailWithRoles(username)
-            .orElseThrow(() -> new UsernameNotFoundException(
-                "User not found with email: " + username));
-
-        return org.springframework.security.core.userdetails.User
-            .builder()
-            .username(user.getEmail())
-            .password(user.getPassword())
-            .authorities(user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-                .collect(Collectors.toList()))
-            .accountExpired(false)
-            .accountLocked(!user.getActive())
-            .credentialsExpired(false)
-            .disabled(!user.getActive())
-            .build();
-    }
-}
-```
-
-## Authentication Controller
-
-```java
-@RestController
-@RequestMapping("/api/auth")
-@RequiredArgsConstructor
-public class AuthenticationController {
-    private final AuthenticationService authenticationService;
-
-    @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(
-            @Valid @RequestBody RegisterRequest request) {
-        AuthenticationResponse response = authenticationService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<AuthenticationResponse> login(
-            @Valid @RequestBody LoginRequest request) {
-        AuthenticationResponse response = authenticationService.login(request);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<AuthenticationResponse> refreshToken(
-            @RequestBody RefreshTokenRequest request) {
-        AuthenticationResponse response = authenticationService.refreshToken(request);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/logout")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> logout() {
-        SecurityContextHolder.clearContext();
-        return ResponseEntity.noContent().build();
-    }
-}
-```
-
-## Authentication Service
-
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional
-public class AuthenticationService {
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
-
-    public AuthenticationResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
-            throw new DuplicateResourceException("Email already registered");
-        }
-
-        User user = User.builder()
-            .email(request.email())
-            .password(passwordEncoder.encode(request.password()))
-            .username(request.username())
-            .active(true)
-            .roles(Set.of(Role.builder().name("USER").build()))
-            .build();
-
-        user = userRepository.save(user);
-
-        String accessToken = jwtService.generateToken(convertToUserDetails(user));
-        String refreshToken = jwtService.generateRefreshToken(convertToUserDetails(user));
-
-        return new AuthenticationResponse(accessToken, refreshToken);
-    }
-
-    public AuthenticationResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(
-                request.email(),
-                request.password()
-            )
-        );
-
-        User user = userRepository.findByEmail(request.email())
-            .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-
-        String accessToken = jwtService.generateToken(convertToUserDetails(user));
-        String refreshToken = jwtService.generateRefreshToken(convertToUserDetails(user));
-
-        return new AuthenticationResponse(accessToken, refreshToken);
-    }
-
-    public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
-        String username = jwtService.extractUsername(request.refreshToken());
-
-        User user = userRepository.findByEmail(username)
-            .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-
-        UserDetails userDetails = convertToUserDetails(user);
-
-        if (!jwtService.isTokenValid(request.refreshToken(), userDetails)) {
-            throw new InvalidTokenException("Invalid refresh token");
-        }
-
-        String accessToken = jwtService.generateToken(userDetails);
-
-        return new AuthenticationResponse(accessToken, request.refreshToken());
-    }
-
-    private UserDetails convertToUserDetails(User user) {
-        return org.springframework.security.core.userdetails.User
-            .builder()
-            .username(user.getEmail())
-            .password(user.getPassword())
-            .authorities(user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-                .collect(Collectors.toList()))
-            .build();
-    }
-}
-```
-
-## Method Security
-
-```java
-@Service
-@RequiredArgsConstructor
-public class UserService {
-    private final UserRepository userRepository;
-
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.principal.id")
-    public User getUserById(Long userId) {
-        return userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-    }
-
-    @PreAuthorize("isAuthenticated()")
-    @PostAuthorize("returnObject.email == authentication.principal.username")
-    public User updateProfile(Long userId, UserUpdateRequest request) {
-        User user = getUserById(userId);
-        // Update logic
-        return userRepository.save(user);
-    }
-
-    @Secured({"ROLE_ADMIN", "ROLE_MANAGER"})
-    public void deleteUser(Long userId) {
-        userRepository.deleteById(userId);
-    }
-}
-```
-
-## OAuth2 Resource Server (JWT)
-
-```java
-@Configuration
-@EnableWebSecurity
-public class OAuth2ResourceServerConfig {
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/public/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt
-                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
-                )
-            );
-
-        return http.build();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        return JwtDecoders.fromIssuerLocation("https://auth.example.com");
-    }
-
-    @Bean
-    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter =
-            new JwtGrantedAuthoritiesConverter();
-        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
-        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
-
-        JwtAuthenticationConverter jwtAuthenticationConverter =
-            new JwtAuthenticationConverter();
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(
-            grantedAuthoritiesConverter);
-
-        return jwtAuthenticationConverter;
-    }
-}
-```
-
-## Quick Reference
-
-| Annotation | Purpose |
-|------------|---------|
-| `@EnableWebSecurity` | Enables Spring Security |
-| `@EnableMethodSecurity` | Enables method-level security annotations |
-| `@PreAuthorize` | Checks authorization before method execution |
-| `@PostAuthorize` | Checks authorization after method execution |
-| `@Secured` | Role-based method security |
-| `@WithMockUser` | Mock authenticated user in tests |
-| `@AuthenticationPrincipal` | Inject current user in controller |
-
-## Security Best Practices
-
-- Always use HTTPS in production
-- Store JWT secret in environment variables
-- Use strong password encoding (BCrypt with strength 12+)
-- Implement token refresh mechanism
-- Add rate limiting to authentication endpoints
-- Validate all user inputs
-- Log security events
-- Keep dependencies updated
-- Use CSRF protection for state-changing operations
-- Implement proper session timeout
+# Security — policy & pitfalls
+
+Generic Spring Security 7 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, `UserDetailsService`, `BCryptPasswordEncoder`) is assumed. This file covers the decisions that actually matter.
+
+> **Spring Boot 4 / Security 7 breaking changes:**
+> - `and()` method **removed** from `HttpSecurity` DSL — use separate lambda calls: `.csrf(csrf -> ...)` instead of `.csrf().disable().and()...`
+> - `authorizeRequests()` **removed** — use `authorizeHttpRequests()`
+> - `WebSecurityConfigurerAdapter` **removed** — use `@Bean SecurityFilterChain`
+
+## Minimal filter chain (Spring Security 7 / Spring Boot 4.x)
+
+- Exactly one `@Bean SecurityFilterChain`. No `WebSecurityConfigurerAdapter` — removed.
+- Explicit `authorizeHttpRequests { … }` — no `permitAll()` at the end by default. Default deny.
+- Explicit choice between stateless (`SessionCreationPolicy.STATELESS`, JWT / resource server) and stateful (default, session cookie, CSRF on).
+- `requestMatchers(...)` — `antMatchers(...)` removed.
+- **No `and()` in DSL** — chain methods as separate lambdas:
+  ```java
+  // ❌ Boot 3 style — and() removed
+  http.csrf().disable().and().authorizeHttpRequests(...)
+  
+  // ✅ Boot 4 style
+  http
+      .csrf(csrf -> csrf.disable())
+      .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+  ```
+
+## CSRF
+
+- **Default is ON and should stay on for stateful (cookie-session) apps.** Disabling CSRF on a cookie-auth API is a real vulnerability, not a nuisance.
+- Disable **only** for fully stateless APIs with `Authorization: Bearer …` (JWT / opaque token) and `SessionCreationPolicy.STATELESS`. In that case `.csrf(csrf -> csrf.disable())` is correct.
+- Never `.csrf(csrf -> csrf.disable())` "to make it work" during development — fix the client (send the token) instead.
+
+## Passwords
+
+- `BCryptPasswordEncoder` or `Argon2PasswordEncoder`. Never `NoOpPasswordEncoder` outside tests.
+- `DelegatingPasswordEncoder` (Spring Security default via `PasswordEncoderFactories.createDelegatingPasswordEncoder()`) — lets you upgrade algorithms without migrating all existing hashes at once.
+- Never compare passwords with `equals` — always `encoder.matches(raw, encoded)`.
+
+## JWT / OAuth2 resource server
+
+- Prefer `spring-boot-starter-oauth2-resource-server` + `oauth2ResourceServer(oauth2 -> oauth2.jwt(withDefaults()))` over hand-rolled JWT parsing.
+- Configure `spring.security.oauth2.resourceserver.jwt.issuer-uri=...` — Spring fetches the JWKS automatically, rotates keys, validates `iss` / `exp` / `nbf`.
+- Do not validate tokens manually in a filter — `BearerTokenAuthenticationFilter` does it for you.
+- Role / scope mapping: inject a `JwtAuthenticationConverter` with a `JwtGrantedAuthoritiesConverter` (authorities prefix `ROLE_` vs `SCOPE_`) instead of sprinkling `.hasAuthority("SCOPE_read")` ad-hoc.
+
+## Method security
+
+- Enable with `@EnableMethodSecurity` (the `prePostEnabled = true` default is correct in Spring Security 7). `@EnableGlobalMethodSecurity` is removed in Spring Security 7.
+- `@PreAuthorize("hasRole('ADMIN')")` on service layer, not controllers — protects the method regardless of how it's called.
+- SpEL: `@PreAuthorize("#userId == authentication.principal.id")` for resource-owner checks.
+- Method security uses proxies — same rules as `@Transactional`: public non-final, no self-invocation.
+
+## Endpoint hardening
+
+- `/actuator/*` — by default only `/health` and `/info` are exposed over HTTP. Don't blindly `management.endpoints.web.exposure.include=*`. If you need `/prometheus`, expose just that and put actuator behind a separate port / auth.
+- `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security` — Spring Security sets sensible defaults. Don't disable them unless you know why.
+- `server.error.include-stacktrace=never` and `server.error.include-message=never` in prod — otherwise validation errors leak object paths.
+
+## CORS
+
+- `.cors(Customizer.withDefaults())` picks up a `CorsConfigurationSource` bean — define one, don't sprinkle `@CrossOrigin` annotations.
+- `allowedOriginPatterns("*")` is required instead of `allowedOrigins("*")` when `allowCredentials=true` — Spring enforces this (CORS spec forbids `*` + credentials).
+- Don't set CORS headers manually in a filter — you'll double-send them when Spring Security's CORS filter also runs. Configure once via the bean.
+
+## SPA + CSRF (cookie-based session)
+
+- Default `CookieCsrfTokenRepository.withHttpOnlyFalse()` lets the JS SPA read the `XSRF-TOKEN` cookie and echo it back as `X-XSRF-TOKEN`. Needed for React/Vue/Angular clients.
+- Since Spring Security 5.8 (still the default in 6/7), CSRF resolution is deferred — use `CsrfTokenRequestAttributeHandler` + setting its `csrfRequestAttributeName = null` if your SPA calls GETs that need the cookie primed. Otherwise the token isn't materialized until the first unsafe request.
+
+## Common mistakes
+
+| Anti-pattern | Why it bites |
+|---|---|
+| Disabling CSRF on a cookie-session app | Real CSRF exploit surface |
+| Matching routes with `/admin/**` for both GET and POST where GET should be public | `requestMatchers(HttpMethod.POST, "/admin/**")` — always be method-specific |
+| Configuring `permitAll()` at the end of the chain "for simplicity" | Any new endpoint is automatically open |
+| Setting `SessionCreationPolicy.STATELESS` but still using `HttpSession` somewhere | Bugs that appear only under load |
+| Using `@Secured` + `@PreAuthorize` mixed — different SpEL support | Pick `@PreAuthorize` and stick with it |
+| Storing JWT secret in `application.yml` committed to git | Rotate by deleting the token? No. Externalize via env / Vault / Config Server. |
+| Decoding the JWT yourself with `Jwts.parser()` | Reinvents expiry / kid / jwks — use `oauth2ResourceServer`. |

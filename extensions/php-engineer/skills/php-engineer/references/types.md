@@ -1,216 +1,100 @@
-# PHP Type System
+# PHP type system — policy & PHPStan discipline
 
-## Scalar and Built-in Types
+Baseline union / intersection / DNF / nullable / `never` / `void` syntax is assumed. This file is about project policy and the type-design choices LLMs get wrong.
 
-```php
-// Scalar
-function process(int $id, float $price, string $name, bool $active): void {}
+## Strict types are the baseline
 
-// Compound
-function handle(array $items, callable $fn, object $obj): void {}
+- `declare(strict_types=1);` on line 1 of every file. Not optional.
+- File-level — it does NOT propagate into called libraries. Libraries may be non-strict; your code still must be.
+- Does NOT affect typed property assignments, return coercion of callee, or implicit `(int)`/`(string)` cast expressions in your own code. Still avoid implicit casts.
 
-// Special
-function maybeNull(?string $value): ?int {}  // nullable shorthand
+## `mixed` — the type-check escape hatch
 
-// void — function returns nothing
-function log(string $message): void {}
+- Every `mixed` is a policy concession — document it with a PHPDoc comment explaining why.
+- Common legitimate uses: `json_decode` raw output, framework-provided `$request->input($key)`, deserialization boundary.
+- Almost never legitimate: service methods, repositories, domain models. If you're tempted to use `mixed` there, you're missing a value object.
+- `mixed` disables PHPStan checking on that value. Narrow it back immediately with `is_string` / `is_int` / `instanceof`.
 
-// never — function never returns (throws or exits)
-function fail(string $msg): never
-{
-    throw new \RuntimeException($msg);
-}
+## Generics via PHPDoc (PHPStan / Psalm)
 
-// mixed — explicit opt-out of typing (document why)
-/** @param mixed $value Raw decoded JSON value */
-function decode(mixed $value): string {}
-```
+PHP has no runtime generics — PHPStan reads PHPDoc annotations and enforces them at analysis time.
 
-## Union Types
+- **Prefer `list<T>` over `array<int, T>`** when the array is sequential from 0. `list<T>` catches "looks sequential but has gaps" bugs.
+- **Use `array{name: string, age: int}`** (array shapes) for fixed-key maps. More precise than `array<string, mixed>`.
+- **Template classes** — `@template T` on the class, `@var T` on properties, `@return T` on methods. Needed for generic collections / repositories.
+- **`class-string<T>`** for methods that take a class name and return `T`: `public function make(string $class): object` → `@param class-string<T> $class, @return T`.
+- PHPStan baseline (`phpstan-baseline.neon`) — commit it to freeze current violations; new code must pass at the project's level without adding new baseline entries.
 
-```php
-// PHP 8.0+
-function formatId(int|string $id): string
-{
-    return (string) $id;
-}
+## Union types
 
-// Nullable is shorthand for T|null
-function find(int|null $id): User|null {}
-// same as:
-function find(?int $id): ?User {}
+- `int|string $id` is fine at boundaries (IDs, route params). Internally narrow immediately.
+- Returning `User|null` is PHP-idiomatic. Returning `User|false` is NOT — it's a legacy habit from `strpos` and similar. Throw an exception or return `null`.
+- `int|bool` almost always means "I'm using `false` as an error sentinel". Don't. Throw or use `null`.
 
-// Multiple types
-function accept(int|float|string $value): string {}
-```
+## Intersection & DNF types
 
-## Intersection Types
+- `Countable&Iterator` — value must satisfy BOTH. Useful for cross-cutting interfaces; otherwise it's an architecture smell (too many interfaces on one param).
+- DNF (PHP 8.2+): `(A&B)|null`, `(Countable&Iterator)|array`. Use sparingly — when you need it, the alternatives (union wrapper, adapter) are usually worse.
 
-```php
-// PHP 8.1+ — value must satisfy ALL types
-function log(Stringable&Countable $value): void {}
+## Nullable
 
-// Common use: combining interfaces
-interface Repository {}
-interface Cacheable {}
+- `?Foo` is sugar for `Foo|null`. Prefer the shorthand in signatures.
+- For properties: `?Foo $prop = null` — must have `= null` default, otherwise accessing before construction throws.
+- For parameters with defaults: `?Foo $foo = null` is more honest than `Foo $foo = null` (deprecated implicit nullable in PHP 8.4+).
 
-function cache(Repository&Cacheable $repo): void {}
-```
+## `never` and `void`
 
-## DNF Types (Disjunctive Normal Form)
+- `never` — function must throw or exit. Enables exhaustiveness: `match` on a union can have a `default => throw new Unexpected()` of type `never`, and PHPStan narrows the remaining branches.
+- `void` — returns no value. Calling code that tries `$x = voidFn()` → error.
+- Don't use `void` when the function might in the future return something. Use `?T` from the start.
 
-```php
-// PHP 8.2+ — union of intersection types
-function handle((Traversable&Countable)|array $items): int
-{
-    return count($items);
-}
-```
+## Property types
 
-## Return Types
+- All properties typed. Untyped property = implicit `mixed` = policy violation.
+- `readonly` implies it will be set in the constructor exactly once — don't add `= null` default (then it could be read-before-write).
+- Properties with complex defaults (`private array $config = [...]`) — consider moving to the constructor for clarity.
 
-```php
-// Static — returns same class, useful for fluent builders
-class Builder
-{
-    public function set(string $key, mixed $value): static
-    {
-        $this->data[$key] = $value;
-        return $this;
-    }
-}
+## Narrowing
 
-// self — returns declaring class (not subclasses)
-class Singleton
-{
-    private static self $instance;
+PHPStan narrows types through:
 
-    public static function getInstance(): self
-    {
-        return self::$instance ??= new self();
-    }
-}
-```
+- `instanceof`
+- `is_string`, `is_int`, `is_array`, `is_object`, `is_a`
+- `!== null` (not `!= null`)
+- `assert()` — included in type narrowing (Psalm / PHPStan read `assert` conditions)
+- `@phpstan-assert` PHPDoc on user-defined guard functions
 
-## Property Types
+Do NOT use early-return `throw` without proper typing — write the guard as a method with `@phpstan-assert Foo $value` so callers narrow.
 
-```php
-class Order
-{
-    // Typed properties must be initialized before access
-    public int      $id;
-    public string   $status;
-    public ?Address $address = null;  // nullable with default
+## Type coverage pitfalls
 
-    // Readonly (PHP 8.1+) — set once in constructor
-    public readonly float $total;
-
-    public function __construct(float $total)
-    {
-        $this->total = $total;
-    }
-}
-```
-
-## Generic-style PHPDoc Types
-
-PHPStan and IDE tooling understand these annotations:
-
-```php
-/** @var array<string, int> */
-private array $scores = [];
-
-/** @var list<User> */  // list = sequential array from 0
-private array $users = [];
-
-/** @var array<int, array{name: string, age: int}> */
-private array $records = [];
-
-/**
- * @template T
- * @param class-string<T> $class
- * @return T
- */
-public function make(string $class): object
-{
-    return new $class();
-}
-
-/**
- * @param array<string, mixed> $data
- * @return array{id: int, name: string}
- */
-public function normalize(array $data): array {}
-```
-
-## Type Coercion and Strict Mode
-
-```php
-// At the top of every file — enforces strict types
-declare(strict_types=1);
-
-// Without strict_types, PHP coerces:
-// "42" → 42 for int params
-// 3.7 → 3 for int params
-
-// With strict_types=1, these throw TypeError
-```
-
-## instanceof and Type Narrowing
-
-```php
-function process(int|string|User $value): string
-{
-    if ($value instanceof User) {
-        return $value->getName(); // PHPStan knows it's User here
-    }
-
-    if (is_int($value)) {
-        return (string) $value;
-    }
-
-    return $value; // PHPStan knows it's string here
-}
-```
+- `/** @return User[] */` vs `/** @return list<User> */` — the first doesn't catch gaps. Use `list<User>`.
+- `/** @return array */` with no item type — PHPStan treats as `array<mixed>`, defeats type checking. Always parameterize.
+- `@var` on a local variable — works but is a code smell. If PHPStan can't infer the type, either the upstream signature is wrong or you need a helper.
+- Generic methods returning `T` from `class-string<T>` — without `@template`, PHPStan returns `object`. Add `@template T of object`.
+- `mixed[]` / `array<mixed>` — banned by policy. Either type it or use a value object.
 
 ## Casting
 
-```php
-// Explicit casts — prefer type-safe alternatives when possible
-$int    = (int) $value;
-$float  = (float) $value;
-$string = (string) $value;
-$bool   = (bool) $value;
-$array  = (array) $value;
+- `(int) "42"` — always works but silently converts `"abc"` to `0`. For user input prefer `filter_var($in, FILTER_VALIDATE_INT)` + null-check.
+- `(array) $object` leaks null-byte-mangled keys. Don't use to introspect; use `get_object_vars` (still exposes private when called inside the class) or `JsonSerializable`.
+- `settype($var, 'int')` mutates in place and returns `bool`. Avoid — use explicit `$var = (int)$var`.
 
-// ✅ Safer for user input
-$id = filter_var($input, FILTER_VALIDATE_INT);
-if ($id === false) {
-    throw new \InvalidArgumentException('Invalid ID');
-}
-```
+## Enum vs class hierarchy
 
-## PHPStan Level Guide
+- Closed, value-like sets → `enum`. `UserRole`, `OrderStatus`.
+- Open hierarchies with behavior → abstract class / interface + classes.
+- Don't mix: a `BillingMode` enum with `calculate(Money $m): Money` methods is OK if behavior is trivial; if logic is substantial, move to a strategy class keyed by the enum.
 
-| Level | What it checks |
-|-------|---------------|
-| 0 | Basic syntax errors |
-| 1 | Unknown classes, functions |
-| 2 | Unknown methods, properties |
-| 3 | Return type mismatches |
-| 4 | Dead code, unknown parameter types |
-| 5 | Checking types of all passed args |
-| 6 | Report missing typehints |
-| 7 | Report partially wrong union types |
-| 8 | Report nullable type issues |
-| 9 | Be strict about mixed type |
+## Value objects
 
-**Minimum target: level 8.** Add to `phpstan.neon`:
+- Policy: wrap primitives used as domain identifiers in `readonly class` value objects (`UserId`, `Email`, `Money`).
+- Cheap: single readonly `value` property + factory + self-equality method.
+- Prevents `function findUser(int $id)` from accepting `productId` silently.
 
-```yaml
-parameters:
-    level: 8
-    paths:
-        - src
-        - app
-```
+## PHPStan / Psalm runtime
+
+- `vendor/bin/phpstan analyse` — target level 8 (or 9 for new projects, which is strict about `mixed`; level 10 = "bleeding edge" rules, opt-in for projects that want maximum strictness).
+- Ignore errors only via `@phpstan-ignore-next-line` with a comment explaining why — never silent via config-wide `ignoreErrors`.
+- Baseline allowed only for legacy code; new code must not add lines to the baseline.
+- On CI: `phpstan analyse --no-progress --error-format=github` + fail on error.

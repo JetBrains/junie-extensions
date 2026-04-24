@@ -1,117 +1,62 @@
 ---
-name: kotlin
-description: Idiomatic Kotlin patterns including coroutines, Flow, multiplatform architecture, Compose UI, Ktor server, and type-safe DSL design. Use when building Kotlin applications with coroutines, KMP, Android Compose, or Ktor. Also covers architecture review, performance tuning, and debugging for JVM/Kotlin backends.
+name: kotlin-engineer
+description: Kotlin 2.x policy and pitfalls. Use when writing, reviewing, or refactoring Kotlin code — enforces coroutine-safety, Flow correctness, null-safety, and API-design rules that LLMs frequently get wrong.
 ---
 
-# Kotlin
+# Kotlin — policy & pitfalls
 
-Senior Kotlin developer patterns covering Kotlin 2.x, coroutines, Flow, Multiplatform, and idiomatic language features.
+Baseline Kotlin knowledge (data/sealed/value classes, scope functions, null-safety operators, extension functions, `suspend`, `Flow`, `when` exhaustiveness) is assumed. This skill does not teach the language — it encodes the project policy and the traps that keep appearing in code review.
+
+## Setup Check (run first)
+
+Before writing non-trivial code:
+
+1. **Kotlin version** — target 2.x when possible. Check `build.gradle(.kts)` (`kotlin("jvm") version "2.x"`) or `libs.versions.toml`.
+2. **JDK target** — `kotlin { jvmToolchain(21) }` or `compileOptions { targetCompatibility = JavaVersion.VERSION_21 }`. Matters for virtual threads (21+) and records interop (17+).
+3. **Compiler plugins** — `kotlin("plugin.spring")`, `kotlin("plugin.jpa")`, `kotlinx-serialization`, `kotlin("kapt")` vs `com.google.devtools.ksp`. Missing `plugin.spring` → final Spring classes can't be proxied. Missing `plugin.jpa` → `InstantiationException: No default constructor`.
+4. **Lint** — `detekt` / `ktlint` configured? Follow the existing rules; don't introduce new violations.
+5. **Build wrapper** — use `./gradlew`
+
+## MUST DO
+
+- **Null-safety via `?`, `?.`, `?:`, `let`, `requireNotNull`.** Use `!!` only when null is a true contract violation — document why on the same line.
+- **Sealed hierarchies** for closed result / state types (`sealed interface Result { data class Success(...); data class Failure(...) }`) + exhaustive `when` without `else`.
+- **Value classes (`@JvmInline value class`)** for domain identifiers (`UserId`, `Email`) — zero-overhead type-safety.
+- **`data class` only for pure value types.** Not for entities, services, or anything with behavior / lifecycle.
+- **Structured concurrency** — inject `CoroutineScope`, use `coroutineScope { }` / framework scopes (`viewModelScope`). Never `GlobalScope.launch`.
+- **Always rethrow `CancellationException`** in generic `catch (e: Exception)` blocks — swallowing it disables cancellation.
+- **Expose read-only Flow types** — `val state: StateFlow<X> = _state.asStateFlow()`. Never leak `MutableStateFlow` / `MutableSharedFlow` from an API.
+- **`withContext(Dispatchers.IO)` / `Default`** for blocking / CPU work inside suspend. Encapsulate dispatcher choice in the repository / data-source layer — not at call sites.
+- **Immutability by default** — `val` over `var`, `List` over `MutableList` in public API, `copy()` on data classes instead of mutation.
+- **Named arguments for 3+ parameters** — prevents silent argument swaps at call sites.
+
+## MUST NOT DO
+
+- **No `!!`** without a commented reason. Refactor to `?.let { }` / `requireNotNull(x) { "why" }`.
+- **No `runBlocking` in production** — only in `main` and tests. Inside a suspend function it's always a bug.
+- **No `GlobalScope.launch` / `GlobalScope.async`** — leaks, no structured cancellation.
+- **No swallowing `CancellationException`.** `try/catch(Exception)` without a cancellation rethrow silently disables cancellation.
+- **No `.first()` / `.single()` on a hot `Flow`** without a timeout — a source that never emits hangs the coroutine forever.
+- **No `async { }.await()` sequentially** when you want parallelism — it's the same as calling `suspend` directly. Use `coroutineScope { val a = async { .. }; val b = async { .. }; a.await() + b.await() }`.
+- **No `Dispatchers.Main` / `Dispatchers.IO` references from common / multiplatform code** unless the module is JVM-only.
+- **No platform-type leaks (`String!`)** in public API — annotate Java interop returns with `@NotNull` / `@Nullable` on the Java side, or cast explicitly.
+- **No catching `Throwable`** — you'll catch `OutOfMemoryError`, `StackOverflowError`, and cancellation. Use `Exception` and rethrow cancellation.
+- **No `lateinit var` on primitives or nullable types** — compile error. Use `Delegates.notNull()` for primitives.
 
 ## Reference Guide
 
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| Coroutines & Flow | `references/coroutines-flow.md` | Async operations, structured concurrency, StateFlow, SharedFlow |
-| DSL & Idioms | `references/dsl-idioms.md` | Scope functions, delegates, extension functions, inline/reified, DSL builders |
-| Ktor Server | `references/ktor-server.md` | Routing, plugins, authentication, serialization |
-| Multiplatform (KMP) | `references/multiplatform-kmp.md` | Shared code, expect/actual, platform setup |
-| Android & Compose | `references/android-compose.md` | Jetpack Compose, ViewModel, Material3, navigation |
-| Architecture | `references/architecture.md` | Package structure, module boundaries, layering, architecture smells |
-| Performance | `references/performance.md` | Profiling, caching, pool sizing, async processing |
-| Debugging | `references/debugging.md` | Investigation workflow, logs, metrics, minimal reproductions |
+| Load when | File |
+|---|---|
+| Async / reactive code — coroutines, Flow, StateFlow/SharedFlow, cancellation, testing | `references/coroutines.md` |
+| API design — scope functions, value/data/sealed classes, extension functions, inline/reified, delegates, `Result<T>` | `references/idioms.md` |
+| Gradle / tooling — Kotlin DSL, version catalogs, KSP vs kapt, multi-module layout, compiler plugins | `references/build-setup.md` |
 
-## Key Patterns
+## Output Format
 
-### Sealed Classes for State Modeling
+When producing code:
 
-```kotlin
-sealed class UiState<out T> {
-    data object Loading : UiState<Nothing>()
-    data class Success<T>(val data: T) : UiState<T>()
-    data class Error(val message: String, val cause: Throwable? = null) : UiState<Nothing>()
-}
+1. A short plan (1–3 bullets) of what's changing.
+2. The code.
+3. A checklist of the non-obvious MUST rules applied.
 
-// Exhaustive when — compiler enforces all branches
-fun render(state: UiState<User>) = when (state) {
-    is UiState.Loading  -> showSpinner()
-    is UiState.Success  -> showUser(state.data)
-    is UiState.Error    -> showError(state.message)
-}
-```
-
-### Coroutines & Flow
-
-```kotlin
-// Use structured concurrency — never GlobalScope
-class UserRepository(private val api: UserApi, private val scope: CoroutineScope) {
-
-    fun userUpdates(id: String): Flow<UiState<User>> = flow {
-        emit(UiState.Loading)
-        try {
-            emit(UiState.Success(api.fetchUser(id)))
-        } catch (e: IOException) {
-            emit(UiState.Error("Network error", e))
-        }
-    }.flowOn(Dispatchers.IO)
-
-    private val _user = MutableStateFlow<UiState<User>>(UiState.Loading)
-    val user: StateFlow<UiState<User>> = _user.asStateFlow()
-}
-```
-
-### Null Safety
-
-```kotlin
-val displayName = user?.profile?.name ?: "Anonymous"
-
-user?.email?.let { email -> sendNotification(email) }
-
-// !! only when null is a true contract violation
-val config = requireNotNull(System.getenv("APP_CONFIG")) { "APP_CONFIG must be set" }
-```
-
-### Scope Functions
-
-```kotlin
-// apply — configure object, returns receiver
-val request = HttpRequest().apply {
-    url = "https://api.example.com/users"
-    headers["Authorization"] = "Bearer $token"
-}
-
-// let — transform nullable / introduce local scope
-val length = name?.let { it.trim().length } ?: 0
-
-// also — side-effects without breaking the chain
-val user = createUser(form).also { logger.info("Created user ${it.id}") }
-```
-
-### Value Classes (zero runtime overhead)
-
-```kotlin
-@JvmInline
-value class UserId(val value: String)
-
-@JvmInline
-value class Email(val value: String) {
-    init { require(value.contains("@")) { "Invalid email: $value" } }
-}
-```
-
-## Constraints
-
-### MUST DO
-- Use null safety (`?`, `?.`, `?:`) — use `!!` only when null is a contract violation
-- Prefer `sealed class`/`sealed interface` for state and result modeling
-- Use `suspend` functions for async operations; `Flow` for streams
-- Apply scope functions appropriately (`let`, `run`, `apply`, `also`, `with`)
-- Use structured concurrency — inject `CoroutineScope`, never use `GlobalScope`
-- Handle `CancellationException` correctly — always rethrow it
-- Run `detekt` and `ktlint` before committing
-
-### MUST NOT DO
-- Block coroutines with `runBlocking` in production code (only in `main` or tests)
-- Use `!!` without a documented reason
-- Use `GlobalScope.launch` — use structured concurrency
-- Mix platform-specific code into common/shared modules (KMP)
-- Ignore coroutine cancellation
+When reviewing code: call out MUST-DO / MUST-NOT violations explicitly and suggest the minimal fix.

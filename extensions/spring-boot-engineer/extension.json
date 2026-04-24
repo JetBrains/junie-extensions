@@ -1,4 +1,4 @@
 {
   "name": "spring-boot-engineer",
-  "description": "Complete Spring Boot 3.x guide: REST APIs, Spring Data JPA, Spring Security 6, WebFlux reactive, Kotlin patterns, event-driven architecture, Resilience4j, Spring Cloud, and testing. Single skill covering the full stack."
+  "description": "Spring Boot 4.x expert for Java and Kotlin (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) — also covers Boot 3.x. Handles REST APIs, Spring Data JPA, OAuth2/JWT, WebFlux, event-driven and resilient microservices, testing with Testcontainers and @MockitoBean, plus Boot 3→4 migration traps (Jackson 3 package rename, removed @MockBean, Security DSL without and(), Undertow dropped) and the production pitfalls that bite hardest: @Transactional self-invocation, N+1 queries, Kotlin + JPA plugin setup, blocking calls inside WebFlux."
 }

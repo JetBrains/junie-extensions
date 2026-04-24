@@ -1,242 +1,53 @@
-# Event-Driven Architecture — Spring Boot
+# Event-driven — policy & pitfalls
 
-## Domain Event Base
+Generic Spring `@EventListener` / Kafka knowledge is assumed. This file covers the transactional gotchas and outbox pattern.
 
-```java
-// Immutable event — use records (Java 16+)
-public record ProductCreatedEvent(
-    UUID eventId,
-    UUID correlationId,
-    LocalDateTime occurredAt,
-    String productId,
-    String name,
-    BigDecimal price
-) {
-    public static ProductCreatedEvent of(String productId, String name, BigDecimal price) {
-        return new ProductCreatedEvent(
-            UUID.randomUUID(), UUID.randomUUID(), LocalDateTime.now(),
-            productId, name, price
-        );
-    }
-}
-```
+## In-process events: `@EventListener` vs `@TransactionalEventListener`
 
-## Aggregate Root Collecting Events
+- `@EventListener` fires **inside** the publisher's transaction. If the transaction later rolls back, the listener has already run — side effects leak.
+- `@TransactionalEventListener(phase = AFTER_COMMIT)` fires only after a successful commit. **This is the default you want** for anything that sends email, publishes to Kafka, or calls external services.
+- `phase = AFTER_ROLLBACK` for compensations / cleanup.
+- If the publisher is not in a transaction, `@TransactionalEventListener` silently **does not fire**. Set `fallbackExecution = true` if you want it to fire in that case; otherwise treat missing listeners as a bug.
 
-```java
-public class Product {
-    private String id;
-    private String name;
-    private BigDecimal price;
+## Listeners + transactions
 
-    @Transient
-    private final List<Object> domainEvents = new ArrayList<>();
+- A `@TransactionalEventListener` that itself needs a DB write runs **after** the original commit, so it opens a new transaction with `@Transactional(propagation = REQUIRES_NEW)`. If you forget `REQUIRES_NEW`, the write might join no transaction at all (depending on config) and fail silently.
+- Listener exceptions in `AFTER_COMMIT` do **not** roll back the publisher's already-committed transaction. You lose the event unless you persist it first (see outbox below).
 
-    public static Product create(String name, BigDecimal price) {
-        Product p = new Product();
-        p.id    = UUID.randomUUID().toString();
-        p.name  = name;
-        p.price = price;
-        p.domainEvents.add(ProductCreatedEvent.of(p.id, name, price));
-        return p;
-    }
+## Async listeners
 
-    public List<Object> getDomainEvents() { return List.copyOf(domainEvents); }
-    public void clearDomainEvents()       { domainEvents.clear(); }
-}
-```
+- `@Async` + `@EventListener` to run off the request thread. Requires `@EnableAsync` and a properly sized `TaskExecutor` bean (`ThreadPoolTaskExecutor` — never the default, which is unbounded).
+- Exceptions in `@Async` listeners disappear unless you set `AsyncUncaughtExceptionHandler`.
 
-## Publishing Events in Application Service
+## Kafka basics — what to get right
 
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional
-public class ProductService {
-    private final ProductRepository productRepository;
-    private final ApplicationEventPublisher eventPublisher;
+- **Idempotent consumer is not optional.** Kafka delivery is "at least once"; the same message can arrive twice. Use an idempotency key (message ID + consumer group) stored in DB, skip if already processed.
+- Use manual acknowledgment: set `spring.kafka.listener.ack-mode=MANUAL_IMMEDIATE` and call `acknowledgment.acknowledge()` after business logic succeeds. Spring Kafka disables Kafka's native `enable.auto.commit` by default when using listener containers, but the default `AckMode.BATCH` commits after the entire batch completes — a handler crash mid-batch still causes redelivery, and with `BATCH` you lose per-message control.
+- Consumer `max.poll.interval.ms` must comfortably exceed your longest handler. Otherwise the consumer is kicked from the group, partition rebalances, message redelivered to another instance.
+- Producer: `acks=all`, `enable.idempotence=true`, `retries=Integer.MAX_VALUE`, `max.in.flight.requests.per.connection=5`. Those are the safe defaults for "exactly once" at the producer side.
+- Error handling: configure `DefaultErrorHandler` with a `DeadLetterPublishingRecoverer` after N retries. Never throw from a listener without a DLT — you'll get infinite redelivery.
 
-    public ProductResponse createProduct(CreateProductRequest request) {
-        Product product = Product.create(request.name(), request.price());
-        Product saved   = productRepository.save(product);
+## Outbox pattern (dual-write problem)
 
-        saved.getDomainEvents().forEach(eventPublisher::publishEvent);
-        saved.clearDomainEvents();
+Writing to DB **and** publishing to Kafka in the same service is a dual-write: one can succeed while the other fails.
 
-        return ProductResponse.from(saved);
-    }
-}
-```
+Outbox:
 
-## Transactional Event Listeners
+1. In the same DB transaction: write the business row **and** insert into an `outbox` table (`id`, `aggregate`, `payload`, `created_at`, `published boolean`).
+2. A separate poller (`@Scheduled` + `SKIP LOCKED` query) reads unpublished rows and emits to Kafka.
+3. On successful publish, mark `published = true`. On failure, retry next poll.
 
-```java
-@Component
-@RequiredArgsConstructor
-@Slf4j
-public class ProductEventHandler {
-    private final NotificationService notificationService;
-    private final InventoryService    inventoryService;
+Debezium CDC is an alternative: tail the DB log instead of polling. Choose based on ops complexity, not cleverness.
 
-    // Fires only AFTER the transaction commits — safest default
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onProductCreated(ProductCreatedEvent event) {
-        log.info("Product created: {}", event.productId());
-        notificationService.sendCreatedNotification(event.name(), event.price());
-        inventoryService.register(event.productId());
-    }
-}
-```
+## Ordering
 
-| Phase | When it fires |
-|-------|---------------|
-| `BEFORE_COMMIT` | Just before commit — can still roll back |
-| `AFTER_COMMIT` | After successful commit (recommended) |
-| `AFTER_ROLLBACK` | On rollback |
-| `AFTER_COMPLETION` | Either outcome |
+- Within a Kafka partition, order is guaranteed. Across partitions, it is not. Pick a partition key that groups everything that must stay ordered (e.g. `user_id`, `order_id`).
+- `@EventListener` ordering: `@Order(…)`. Do not rely on listener declaration order.
 
-> **Warning**: `@TransactionalEventListener` fires on the same thread after commit. For long-running work, use `@Async` or publish to Kafka.
+## Common mistakes
 
-## Async Event Handling
-
-```java
-@Component
-@Slf4j
-public class AsyncProductEventHandler {
-
-    @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onProductCreated(ProductCreatedEvent event) {
-        // Runs on a separate thread — transaction is already committed
-        sendEmailAsync(event);
-    }
-}
-
-// Enable in @SpringBootApplication class:
-@SpringBootApplication
-@EnableAsync
-public class MyApplication { ... }
-```
-
-## Kafka Event Publishing
-
-```java
-@Component
-@RequiredArgsConstructor
-@Slf4j
-public class KafkaEventPublisher {
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void publishProductCreated(ProductCreatedEvent event) {
-        kafkaTemplate.send("product-events", event.productId(), event)
-            .whenComplete((result, ex) -> {
-                if (ex != null) log.error("Failed to publish {}", event.productId(), ex);
-            });
-    }
-}
-```
-
-```yaml
-spring:
-  kafka:
-    bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-    consumer:
-      group-id: product-service
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
-```
-
-## Transactional Outbox Pattern
-
-Use when you need guaranteed delivery — stores events atomically with business data, polls and publishes separately:
-
-```java
-@Entity
-@Table(name = "outbox_events")
-@Builder @Getter
-@NoArgsConstructor @AllArgsConstructor
-public class OutboxEvent {
-    @Id @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
-    private String aggregateId;
-    private String eventType;
-
-    @Column(columnDefinition = "TEXT")
-    private String payload;           // JSON
-
-    private LocalDateTime createdAt;
-    private LocalDateTime publishedAt; // null = pending
-}
-
-// In application service — same transaction as business data
-@Transactional
-public ProductResponse createProduct(CreateProductRequest request) {
-    Product product = productRepository.save(Product.create(request.name(), request.price()));
-
-    outboxRepository.save(OutboxEvent.builder()
-        .aggregateId(product.getId())
-        .eventType("ProductCreated")
-        .payload(objectMapper.writeValueAsString(ProductCreatedEvent.from(product)))
-        .createdAt(LocalDateTime.now())
-        .build());
-
-    return ProductResponse.from(product);
-}
-
-// Scheduled publisher (separate transaction)
-@Component
-@RequiredArgsConstructor
-@Slf4j
-public class OutboxPublisher {
-    private final OutboxEventRepository outboxRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-
-    @Scheduled(fixedDelay = 5_000)
-    @Transactional
-    public void publishPending() {
-        outboxRepository.findByPublishedAtIsNull().forEach(event -> {
-            try {
-                kafkaTemplate.send("product-events", event.getAggregateId(), event.getPayload());
-                event.setPublishedAt(LocalDateTime.now());
-            } catch (Exception ex) {
-                log.error("Outbox publish failed for {}", event.getId(), ex);
-            }
-        });
-    }
-}
-```
-
-## Idempotent Consumer
-
-```java
-@Component
-@RequiredArgsConstructor
-public class IdempotentProductConsumer {
-    private final ProcessedEventRepository processedEvents;
-
-    @KafkaListener(topics = "product-events", groupId = "inventory-service")
-    public void consume(ProductCreatedEvent event) {
-        String key = event.eventId().toString();
-        if (processedEvents.existsByEventId(key)) return;  // already handled
-
-        doProcess(event);
-        processedEvents.save(new ProcessedEvent(key, LocalDateTime.now()));
-    }
-}
-```
-
-## Best Practices
-
-- Name events in past tense: `ProductCreated`, not `CreateProduct`
-- Keep events immutable (records in Java, data classes in Kotlin)
-- Include `eventId` + `correlationId` for tracing
-- Use `AFTER_COMMIT` phase — prevents handlers firing on rolled-back transactions
-- Design consumers to be idempotent — distributed systems may deliver duplicates
-- Use outbox pattern for cross-service guaranteed delivery (avoids dual-write problem)
+- `@EventListener` (not `@TransactionalEventListener`) on a handler that sends email → email on every rollback.
+- Listener throws → caller's transaction rolls back unexpectedly (for in-transaction listeners). Catch in the listener if you want to decouple.
+- No DLT configured → Kafka consumer loops forever on a poison message.
+- Outbox table never cleaned up → grows to millions of rows; add a retention job.
+- Using `spring.kafka.listener.ack-mode=BATCH` but calling `ack.acknowledge()` on each message (no-op in batch mode).

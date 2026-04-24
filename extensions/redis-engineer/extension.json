@@ -1,4 +1,4 @@
 {
   "name": "redis-engineer",
-  "description": "Redis best practices: data structures, key naming, caching patterns, memory management, transactions, pub/sub, clustering, persistence, and observability."
+  "description": "Redis policy & pitfalls — atomicity, TTL strategy, distributed locks, cache stampede, cluster hash tags, eviction, persistence. Catches the traps LLMs miss: SETNX+EX (deprecated syntax), KEYS on production, HGETALL on big hashes, Pub/Sub misused as queue, DEL to release locks."
 }

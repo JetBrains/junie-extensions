@@ -1,258 +1,69 @@
 ---
 name: "sql-patterns"
-description: "SQL best practices: CTEs, window functions, query optimization, indexing, safe migrations (Flyway/Liquibase). Use when writing SQL queries, optimizing slow queries, designing schemas, or managing database migrations."
+description: "SQL policy & pitfalls — query correctness, indexing strategy, safe migrations. Use when writing SQL, diagnosing slow queries, designing schemas, or reviewing Flyway/Liquibase migrations. Covers the traps LLMs miss by default: NOT IN with NULLs, function-on-column breaking indexes, OFFSET on large tables, NOT NULL column lock, CREATE INDEX blocking writes, immutable migrations."
 ---
 
-# SQL Patterns Skill
+# SQL — policy & pitfalls
 
-Write efficient SQL queries and maintainable database migrations.
+Baseline SQL knowledge (CTE, window functions, joins, DML, Flyway/Liquibase syntax) is assumed. This skill encodes policy and the traps that keep appearing in review — dialect-specific, blocking-behavior-specific, and optimizer-specific.
 
-## Scope and Notes
+## Setup Check (run first)
 
-- Use this skill for raw SQL, indexing, and migration strategy.
-- Verify query advice with `EXPLAIN`/actual plans on the target database; optimizer behavior differs across PostgreSQL, MySQL, Oracle, and others.
-- For ORM-specific issues, prefer `spring-boot-engineer` → `references/data.md`.
+Before writing non-trivial SQL:
 
-## When to Use
-- Writing SQL queries, CTEs, or window functions
-- Reviewing or designing database schemas
-- Optimizing slow queries
-- Writing or reviewing database migrations (Flyway/Liquibase)
+1. **Dialect** — identify the target (Postgres, MySQL, MariaDB, SQLite, SQL Server). Optimizer behavior, locking rules, and index features differ. Never assume Postgres semantics on MySQL or vice versa.
+2. **Migration tool** — check `db/migration/` (Flyway) or `db/changelog/` (Liquibase). Both are immutable: already-applied migrations must NEVER be edited.
+3. **EXPLAIN access** — if the DBHub MCP is configured, use it to run `EXPLAIN (ANALYZE, BUFFERS)` (Postgres) or `EXPLAIN FORMAT=JSON` (MySQL) against a representative dataset. Advice without a real query plan is a guess.
+4. **Table sizes** — query advice differs by orders of magnitude between 10K and 100M rows. Use DBHub (or `pg_stat_user_tables` / `information_schema.tables`) to check sizes when choosing pagination, indexing, and migration strategy.
 
----
+## DBHub MCP
 
-## CTEs (Common Table Expressions)
+When the DBHub MCP server is available (configured in `mcp/.mcp.json`), use it actively:
 
-```sql
--- Simple CTE — named subquery, improves readability
-WITH active_users AS (
-    SELECT id, name, email
-    FROM users
-    WHERE status = 'active'
-)
-SELECT * FROM active_users WHERE created_at > '2024-01-01';
+- **Schema inspection** — list tables, columns, types, and indexes before writing queries or migrations.
+- **`EXPLAIN ANALYZE`** — run against real data to verify index usage and row estimates before declaring a query optimized.
+- **Row counts / size estimates** — query `pg_stat_user_tables` (Postgres) or `information_schema.tables` (MySQL) to determine pagination and migration strategy.
+- **Validate migrations** — check current schema state before generating DDL to avoid duplicate columns or conflicting constraints.
 
--- Chained CTEs — each builds on the previous
-WITH
-    active_users AS (
-        SELECT id, name FROM users WHERE status = 'active'
-    ),
-    user_orders AS (
-        SELECT user_id, COUNT(*) AS order_count
-        FROM orders GROUP BY user_id
-    )
-SELECT u.name, COALESCE(o.order_count, 0) AS orders
-FROM active_users u
-LEFT JOIN user_orders o ON u.id = o.user_id;
+Do not suggest schema changes or index additions without first confirming the current schema via DBHub or the codebase.
 
--- Recursive CTE — tree/hierarchy traversal
-WITH RECURSIVE category_tree AS (
-    SELECT id, name, parent_id, 0 AS depth
-    FROM categories WHERE parent_id IS NULL
-    UNION ALL
-    SELECT c.id, c.name, c.parent_id, ct.depth + 1
-    FROM categories c
-    JOIN category_tree ct ON c.parent_id = ct.id
-)
-SELECT * FROM category_tree ORDER BY depth, name;
-```
+## MUST DO
 
----
+- **List columns explicitly** — never `SELECT *` in application code (breaks on schema change, pulls unused columns).
+- **`NOT EXISTS` / `LEFT JOIN ... IS NULL`** instead of `NOT IN` when the subquery can return `NULL` (NOT IN with a single NULL returns zero rows — silently).
+- **Keyset pagination** (`WHERE id > :last ORDER BY id LIMIT n`) for large / user-driven lists. OFFSET degrades as it grows.
+- **Parameterize every query** — prepared statements / bound parameters. Never string-concat user input even with escaping.
+- **Index what you filter and join on** — `WHERE`, `JOIN ON`, `ORDER BY` columns. Composite index order matters: leftmost columns usable, tail columns only with leading predicates.
+- **Transaction-scope migrations where possible** — Flyway wraps single migration in a transaction by default; Postgres supports DDL in transactions, MySQL does NOT (each DDL auto-commits, a failed migration leaves partial state).
+- **`EXPLAIN ANALYZE`** before declaring a query "optimized" — optimizer choice depends on stats, table size, and dialect.
 
-## Window Functions
+## MUST NOT DO
 
-| Function | Use |
+- **No `NOT IN (SELECT ... )` on nullable columns.** `WHERE x NOT IN (NULL, 1, 2)` returns empty. Use `NOT EXISTS` or `LEFT JOIN ... IS NULL`.
+- **No functions on indexed columns in `WHERE`.** `WHERE YEAR(created_at) = 2024` ignores the index — use `WHERE created_at >= '2024-01-01' AND created_at < '2025-01-01'`. Or create a functional / expression index.
+- **No `OR` across different columns in `WHERE`** when one side isn't indexed — split into `UNION ALL` (or create a combined index).
+- **No `ALTER TABLE ... ADD COLUMN NOT NULL` without default** on a large table — locks the table, rewrites every row. Split into: add nullable column → backfill in batches → add NOT NULL constraint.
+- **No `CREATE INDEX`** on a large write-active table without `CONCURRENTLY` (Postgres) / `ONLINE` (MySQL 5.6+, default in 8.0) / `WITH (ONLINE = ON)` (SQL Server) — blocks writes for the duration.
+- **No editing applied migrations.** Flyway checksums them; Liquibase hashes them. Changing a released `V3__add_email.sql` breaks every environment. Add a new migration.
+- **No `SELECT COUNT(*)` on large tables** for pagination UIs — it's a full scan on Postgres (MVCC can't use index). Use approximate counts (`pg_class.reltuples`) or "more results" cursor.
+- **No `DISTINCT` to fix duplicate rows** — it masks a broken JOIN. Fix the join.
+- **No implicit type casts in joins** (`JOIN x ON x.id = y.id_str`) — disables indexes, silently wrong if types differ. Match types.
+- **No credentials, PII, or secrets in migration files** — they go to version control forever.
+
+## Reference Guide
+
+| Load when | File |
 |---|---|
-| `ROW_NUMBER()` | Unique sequential number per partition |
-| `RANK()` | Rank with gaps on ties (1, 2, 2, 4) |
-| `DENSE_RANK()` | Rank without gaps (1, 2, 2, 3) |
-| `LAG(col, n)` | Value from n rows before |
-| `LEAD(col, n)` | Value from n rows after |
-| `SUM() OVER` | Running total |
-| `AVG() OVER` | Moving average |
-| `FIRST_VALUE()` / `LAST_VALUE()` | First/last in window frame |
+| Writing / reviewing Flyway / Liquibase migrations; running online schema changes | `references/migrations.md` |
+| Diagnosing a slow query; choosing indexes; reading EXPLAIN output | `references/performance.md` |
 
-```sql
--- Running total + day-over-day delta
-SELECT
-    date,
-    revenue,
-    LAG(revenue, 1) OVER (ORDER BY date)          AS prev_day,
-    revenue - LAG(revenue, 1) OVER (ORDER BY date) AS delta,
-    SUM(revenue) OVER (ORDER BY date)              AS running_total
-FROM daily_sales;
+## Output Format
 
--- Top 1 per group (no subquery)
-SELECT *
-FROM (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn
-    FROM orders
-) ranked
-WHERE rn = 1;
-```
+When producing SQL:
 
----
+1. Short plan (1–3 bullets) — what the query / migration does and which tables / indexes it touches.
+2. The SQL, dialect-qualified when dialect-specific (`-- Postgres only`).
+3. If modifying schema on a large table, describe the locking / backfill plan (not just the DDL).
+4. For non-trivial queries — include the expected plan shape (index scan vs seq scan) and the index it relies on. If no such index exists, flag that as part of the change.
 
-## JOIN Reference
-
-| Type | Returns |
-|---|---|
-| `INNER JOIN` | Only matching rows |
-| `LEFT JOIN` | All left rows + matching right (NULL where no match) |
-| `RIGHT JOIN` | All right rows + matching left |
-| `FULL OUTER JOIN` | All rows from both sides |
-| `CROSS JOIN` | Cartesian product |
-
-```sql
--- ✅ Prefer LEFT JOIN + IS NULL for "not in other table" (handles NULLs correctly)
-SELECT u.id FROM users u
-LEFT JOIN orders o ON u.id = o.user_id
-WHERE o.id IS NULL;  -- users with no orders
-
--- ❌ NOT IN fails silently when subquery contains NULLs
-SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM orders);
-```
-
----
-
-## Flyway Migrations
-
-```sql
--- V1__create_users_table.sql
-CREATE TABLE users (
-    id          BIGSERIAL PRIMARY KEY,
-    email       VARCHAR(255) NOT NULL UNIQUE,
-    name        VARCHAR(100) NOT NULL,
-    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_users_email ON users(email);
-```
-
-Naming convention: `V{version}__{description}.sql`
-
----
-
-## Indexing
-
-```sql
--- ✅ Index columns used in WHERE, JOIN, ORDER BY
-CREATE INDEX idx_orders_user_id ON orders(user_id);
-CREATE INDEX idx_orders_status_created ON orders(status, created_at DESC);
-
--- ✅ Partial index for common filtered queries (exception to the low-cardinality rule below —
--- partial indexes are efficient even on low-cardinality columns because they only index the
--- matching subset, e.g. the 5% of rows with status = 'PENDING')
-CREATE INDEX idx_orders_pending ON orders(created_at)
-WHERE status = 'PENDING';
-
--- ❌ Don't create full indexes on low-cardinality columns (boolean, status with few values)
-CREATE INDEX idx_users_active ON users(is_active); -- bad if 90% are active
--- Consider a partial index instead if you only query one specific value
-```
-
----
-
-## Query Optimization
-
-```sql
--- ✅ Often prefer EXISTS for correlated subqueries, but verify with EXPLAIN
-SELECT * FROM orders o
-WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = o.user_id AND u.is_active = true);
-
--- ⚠️ IN with subquery can be slower on some databases/workloads
-SELECT * FROM orders WHERE user_id IN (SELECT id FROM users WHERE is_active = true);
-
--- ✅ Good — avoid SELECT *
-SELECT id, email, name FROM users WHERE id = $1;
-
--- ✅ Keyset pagination — O(log n), stays fast on large tables
-SELECT id, name FROM products
-WHERE id > :lastSeenId
-ORDER BY id LIMIT 20;
-
--- ⚠️ OFFSET pagination — degrades as offset grows (full scan to skip rows)
-SELECT id, name FROM products ORDER BY created_at DESC LIMIT 20 OFFSET 40;
-```
-
----
-
-## Safe Migrations
-
-```sql
--- ✅ Good — add column with default (non-blocking in Postgres 11+)
-ALTER TABLE users ADD COLUMN preferences JSONB DEFAULT '{}';
-
--- ✅ Good — create index concurrently (no table lock)
-CREATE INDEX CONCURRENTLY idx_users_name ON users(name);
-
--- ❌ Bad — adding NOT NULL without default locks table
-ALTER TABLE users ADD COLUMN phone VARCHAR(20) NOT NULL;
-```
-
----
-
-## Liquibase Migrations
-
-Liquibase uses XML/YAML/JSON changelogs instead of plain SQL files. Each `changeSet` is tracked in `DATABASECHANGELOG` table.
-
-```yaml
-# db/changelog/db.changelog-master.yaml
-databaseChangeLog:
-  - include:
-      file: db/changelog/changes/001-create-users-table.yaml
-  - include:
-      file: db/changelog/changes/002-add-users-phone.yaml
-```
-
-```yaml
-# db/changelog/changes/001-create-users-table.yaml
-databaseChangeLog:
-  - changeSet:
-      id: 001
-      author: dev
-      changes:
-        - createTable:
-            tableName: users
-            columns:
-              - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
-                  constraints:
-                    primaryKey: true
-              - column:
-                  name: email
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-                    unique: true
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-```
-
-Point your framework's datasource config to `classpath:db/changelog/db.changelog-master.yaml`.
-
-Key differences from Flyway:
-- Changelogs are **immutable** — never edit an applied `changeSet`, add a new one instead.
-- Supports rollback via `<rollback>` blocks (Flyway Pro only).
-- Use `liquibase:rollback` or `liquibase:rollbackCount` for controlled rollbacks.
-
----
-
-## Anti-Patterns
-
-| Mistake | Problem | Fix |
-|---|---|---|
-| `SELECT *` | Fetches unused columns, breaks on schema change | List columns explicitly |
-| `WHERE YEAR(date) = 2024` | Prevents index use (function on column) | `WHERE date >= '2024-01-01' AND date < '2025-01-01'` |
-| `NOT IN` with nullable column | Silent wrong results when NULLs present | Use `NOT EXISTS` or `LEFT JOIN ... IS NULL` |
-| `OR` in WHERE across different columns | Prevents index use | Split into `UNION ALL` or redesign index |
-| N+1 queries | 1 query per row instead of 1 join | Use JOIN, batch fetch, or EXISTS |
-| No `LIMIT` on user-driven queries | Full table scan risk | Always paginate external-facing queries |
-| Premature denormalization | Maintenance nightmare | Normalize first, denormalize only with evidence |
+When reviewing SQL: call out MUST-DO / MUST-NOT violations, point out NULL / type / locking traps, and suggest the minimal fix. Prefer `EXPLAIN`-verified advice over cargo-cult rules.

@@ -1,0 +1,4 @@
+{
+  "name": "android-engineer",
+  "description": "Senior Android engineer workflows — Kotlin-first (Java legacy supported), Jetpack Compose + View system, MVVM, Coroutines/Flow, Room, Retrofit, Hilt, plus device orchestration via mobile-mcp (UI element tree, taps, swipes, install, launch) with ADB as fallback for logcat, pm clear, permissions and system settings. Includes skills for implement, debug, build-fix, test, review, and an autonomous QA agent that runs on the emulator."
+}

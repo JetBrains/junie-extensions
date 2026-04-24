@@ -18,9 +18,9 @@ Provides up-to-date library and framework documentation. Use instead of relying 
 
 **Step 1 — Identify the library**: call `resolve-library-id` with the library name and the user's question
 
-**Step 2 — Choose the best match**: select based on name accuracy, benchmark scores, and version if mentioned
+**Step 2 — Choose the best match**: select based on name accuracy, `trustScore`, `totalSnippets`, and version if mentioned
 
-**Step 3 — Retrieve docs**: call `query-docs` with the selected library ID and the user's specific question
+**Step 3 — Retrieve docs**: call `get-library-docs` with the selected library ID and the user's specific `topic` (and optional `tokens` budget)
 
 **Step 4 — Respond**: incorporate documentation findings with code examples and version citations
 
