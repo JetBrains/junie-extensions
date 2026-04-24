@@ -1,6 +1,6 @@
 ---
 name: spring-boot-engineer
-description: Use when building, modifying, or reviewing Spring Boot 4.x applications (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) in Java or Kotlin — REST controllers, Spring Data JPA repositories, OAuth2 / JWT, WebFlux reactive endpoints, Kafka / event-driven code, Resilience4j, Spring Cloud, or Spring Boot tests. Covers common pitfalls that break in production: `@Transactional` self-invocation, N+1 queries, Kotlin + JPA plugins, blocking calls inside WebFlux. Migrating from Boot 3.x? See Setup Check — major breaking changes: Jackson 3 package rename, `@MockBean` removed, `and()` in Security DSL removed, Undertow dropped.
+description: "Use when building, modifying, or reviewing Spring Boot 4.x applications (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) in Java or Kotlin — REST controllers, Spring Data JPA repositories, OAuth2 / JWT, WebFlux reactive endpoints, Kafka / event-driven code, Resilience4j, Spring Cloud, or Spring Boot tests. Covers common pitfalls that break in production: @Transactional self-invocation, N+1 queries, Kotlin + JPA plugins, blocking calls inside WebFlux. Migrating from Boot 3.x? See Setup Check — major breaking changes: Jackson 3 package rename, @MockBean removed, and() in Security DSL removed, Undertow dropped."
 ---
 
 # Spring Boot Engineer
