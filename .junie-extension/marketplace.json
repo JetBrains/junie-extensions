@@ -13,7 +13,7 @@
     {
       "name": "php-engineer",
       "source": "./extensions/php-engineer",
-      "description": "Modern PHP 8.x guide: type system, enums, fibers, match expressions, readonly properties, PSR standards, and Composer. Pure PHP — no framework-specific content.",
+      "description": "PHP 8.x policy & pitfalls: strict types, enums, readonly, match, PHPStan discipline, and security. Catches the traps LLMs miss — type coercion, foreach-by-reference leak, readonly mutation through references, DateTime aliasing, PDO emulation mode.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -23,9 +23,9 @@
       "keywords": [
         "php",
         "php8",
-        "psr",
-        "composer",
-        "static-analysis"
+        "strict-types",
+        "phpstan",
+        "security"
       ]
     },
     {
@@ -83,7 +83,7 @@
     {
       "name": "kotlin-engineer",
       "source": "./extensions/kotlin-engineer",
-      "description": "Complete Kotlin development guide: coroutines, Flow, DSL patterns, idiomatic Kotlin, Ktor server, Android Compose, Kotlin Multiplatform, architecture review, performance, and debugging. Self-contained — works with or without Spring Boot.",
+      "description": "Kotlin 2.x policy & pitfalls: coroutine-safety, Flow correctness, null-safety, API design, and build setup. Catches the traps LLMs miss by default — CancellationException swallowing, StateFlow leaks, GlobalScope misuse, KSP/kapt conflicts.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -93,10 +93,9 @@
       "keywords": [
         "kotlin",
         "coroutines",
-        "kmp",
-        "ktor",
-        "android",
-        "compose"
+        "flow",
+        "null-safety",
+        "kotlin2"
       ]
     },
     {
@@ -152,6 +151,26 @@
         "optimization",
         "flyway",
         "liquibase"
+      ]
+    }
+  ,
+    {
+      "name": "android-engineer",
+      "source": "./extensions/android-engineer",
+      "description": "Senior Android engineer workflows: Kotlin-first, Jetpack Compose, MVVM, Coroutines/Flow, Room, Retrofit, Hilt, plus device orchestration via mobile-mcp with ADB fallback. Covers implement, debug, build-fix, test, review, and autonomous QA on emulator.",
+      "version": "1.0.0",
+      "author": {
+        "name": "JetBrains"
+      },
+      "category": "mobile",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/android-engineer",
+      "keywords": [
+        "android",
+        "kotlin",
+        "compose",
+        "mvvm",
+        "mobile-mcp",
+        "adb"
       ]
     }
   ]
