@@ -1,4 +1,4 @@
 {
   "name": "php-engineer",
-  "description": "Modern PHP 8.x guide: type system, enums, fibers, match expressions, readonly properties, PSR standards, and Composer. Pure PHP — no framework-specific content."
+  "description": "Modern PHP 8.x policy and pitfalls. Enforces strict types, enum/readonly/match, PHPStan discipline, and catches the subtle traps (type coercion, foreach-by-reference leak, readonly mutation through references, DateTime aliasing, PDO emulation, unsafe unserialize, file-upload MIME spoofing) that LLMs miss by default."
 }
