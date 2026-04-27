@@ -44,6 +44,7 @@ Review code or a git diff for Android-specific quality issues.
    **Security:**
    - No hardcoded API keys, secrets, tokens?
    - `android:exported` explicitly set (`true` or `false`) on **every** Activity, Service and BroadcastReceiver that declares an `<intent-filter>` — required on Android 12+ (targetSdk 31+), the build will fail otherwise. Non-exported components that have no intent-filter don't need it, but setting it explicitly is still preferred.
+   - Foreground Services on Android 14+ (targetSdk 34+): **`android:foregroundServiceType` is required**. Missing it → `SecurityException` at runtime. Allowed types: `camera`, `connectedDevice`, `dataSync`, `health`, `location`, `mediaPlayback`, `mediaProjection`, `microphone`, `phoneCall`, `remoteMessaging`, `shortService`, `specialUse`, `systemExempted`.
    - `usesCleartextTraffic="false"` unless explicitly needed?
    - WebView `setJavaScriptEnabled(true)` only if strictly required?
 

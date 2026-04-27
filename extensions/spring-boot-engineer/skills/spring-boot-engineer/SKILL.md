@@ -58,7 +58,7 @@ Virtual threads: enable via `spring.threads.virtual.enabled=true`. Don't use the
 
 ### Step 4 — Jackson version
 
-Spring Boot 4 defaults to **Jackson 3**. The package was renamed: `com.fasterxml.jackson` → `tools.jackson`. Any code importing Jackson classes directly will break. A `jackson-databind-compat` bridge module exists for gradual migration, but plan to update imports. If the project already uses Jackson 3 → proceed. If still on Jackson 2 → flag the migration before adding new Jackson-dependent code.
+Spring Boot 4 defaults to **Jackson 3**. Most packages were renamed: `com.fasterxml.jackson` → `tools.jackson`. Exception: `jackson-annotations` intentionally keeps the old namespace (`com.fasterxml.jackson.annotation`) for backward compatibility. Any code importing `jackson-databind` or `jackson-core` classes directly will break — update imports. No official compatibility bridge exists; migration must be done manually. If the project already uses Jackson 3 → proceed. If still on Jackson 2 → flag the migration before adding new Jackson-dependent code.
 
 ## Reference Guide
 

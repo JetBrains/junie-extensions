@@ -37,9 +37,9 @@ Same rule for `@NotNull`, `@Size`, `@Email`, `@Pattern`, `@Min`, `@Max`, `@Valid
 - Mutable fields: `var`, nullable only where the column is nullable. Don't make everything `var` "to be safe" — it blows up encapsulation.
 - No `companion object` with `toEntity` / `fromEntity` helpers on the entity itself — put mapping in a dedicated mapper class / extension functions. Keeps entity free of transitive dependencies.
 
-## Coroutine controllers (WebFlux only, not MVC)
+## Coroutine controllers (MVC and WebFlux)
 
-Suspend functions work in `@RestController` only when the app runs on WebFlux. In plain MVC they silently return `CompletableFuture` of the continuation — not what you want.
+Suspend functions in `@RestController` work in **both Spring MVC and WebFlux** — Spring Framework handles them when `kotlinx-coroutines-reactor` is on the classpath (pulled in transitively by `spring-boot-starter-webflux` or explicitly). In MVC, Spring wraps the coroutine in a `Callable` and executes it on an async task executor — not blocking the servlet thread.
 
 ```kotlin
 @GetMapping("/{id}")

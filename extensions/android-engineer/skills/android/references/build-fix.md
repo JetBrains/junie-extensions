@@ -59,6 +59,6 @@ Classify and fix Gradle / compile / KSP / KAPT / resource errors.
 - Missing import → IDE or manual `import com.example.Foo`.
 - API level issue → guard with `if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.X)`.
 - Room migration missing → bump DB version, add a `Migration(from, to)` in the builder.
-- Compose compiler / Kotlin version mismatch → update `compose-compiler` to match Kotlin version matrix.
+- Compose compiler / Kotlin version mismatch → with Kotlin 2.0+ the Compose compiler is bundled and versioned automatically; just update Kotlin. For Kotlin < 2.0: update `compose-compiler` to match the Kotlin version matrix.
 - `Duplicate class` → exclude transitive dep: `exclude(group = "com.foo", module = "bar")`.
 - `Execution failed for task ':app:checkDebugDuplicateClasses'` → run `./gradlew :app:dependencies` and find the double.

@@ -63,5 +63,5 @@ Each unique combination of `@MockitoBean` + other context customizers produces a
 ## Testcontainers performance
 
 - `@Testcontainers(parallel = true)` starts containers in parallel within a test class.
-- Global singleton pattern: declare `static final PostgreSQLContainer<?> DB = new PostgreSQLContainer<>("postgres:18").withReuse(true); static { DB.start(); }` and point `@ServiceConnection` / `@DynamicPropertySource` at it. One container for the entire suite.
+- Global singleton pattern: declare `static final PostgreSQLContainer<?> DB = new PostgreSQLContainer<>("postgres:17").withReuse(true); static { DB.start(); }` and point `@ServiceConnection` / `@DynamicPropertySource` at it. One container for the entire suite.
 - Ryuk cleanup can be disabled for CI where the runner itself is ephemeral (`TESTCONTAINERS_RYUK_DISABLED=true`) — saves 2–3s per test class.

@@ -45,7 +45,7 @@ Generic Spring Security 7 knowledge (`SecurityFilterChain`, `HttpSecurity` DSL, 
 
 ## Method security
 
-- Enable with `@EnableMethodSecurity` (the `prePostEnabled = true` default is correct in Spring Security 7). `@EnableGlobalMethodSecurity` is removed in Spring Security 7.
+- Enable with `@EnableMethodSecurity` (the `prePostEnabled = true` default is correct in Spring Security 7). `@EnableGlobalMethodSecurity` is **deprecated** since Spring Security 6 — don't use in new code; it still compiles in Security 7 but will be removed.
 - `@PreAuthorize("hasRole('ADMIN')")` on service layer, not controllers — protects the method regardless of how it's called.
 - SpEL: `@PreAuthorize("#userId == authentication.principal.id")` for resource-owner checks.
 - Method security uses proxies — same rules as `@Transactional`: public non-final, no self-invocation.

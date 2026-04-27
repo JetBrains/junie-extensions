@@ -35,7 +35,7 @@ Collected from real Redis incidents, not from the `redis.io` command reference. 
   - `allkeys-lru` / `allkeys-lfu` — evict by recency / frequency across all keys. Use for pure caches.
   - `volatile-lru` / `volatile-lfu` / `volatile-ttl` / `volatile-random` — evict only keys with TTL set. Use for mixed workloads (durable data + cached data), and set TTL only on the cache.
 - **`MEMORY USAGE <key>`** — inspect a single key. `--bigkeys` from `redis-cli` samples the keyspace for outliers. `--memkeys` (6.0+) shows biggest actual memory consumers.
-- **Hot keys** — a single key hit millions of times per second. `--hotkeys` (requires `maxmemory-policy=allkeys-lfu`) finds them. Fix: add a local (in-process) cache layer, shard the key, or rethink access pattern.
+- **Hot keys** — a single key hit millions of times per second. `--hotkeys` (requires any LFU eviction policy: `allkeys-lfu` or `volatile-lfu`) finds them. Fix: add a local (in-process) cache layer, shard the key, or rethink access pattern.
 - **Big keys** (>1 MB values, >10K element containers) cause latency spikes on any O(N) operation, RDB fork stalls, replication backlog buildup. Sentinel-watch `SLOWLOG GET 10` for them.
 - **RDB fork memory**: forking doubles memory in the worst case (write-heavy workload, copy-on-write copies most pages). Keep `maxmemory` well below 50% of RAM on write-heavy instances with RDB.
 - `OBJECT ENCODING` — tells you whether a hash is `listpack` (small, packed) or `hashtable` (large, O(1) access but more memory). `hash-max-listpack-entries` / `-value` control the threshold.

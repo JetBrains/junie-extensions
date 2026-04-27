@@ -34,7 +34,7 @@ JDK 24+ removes pinning for most `synchronized` cases — but production today s
 
 ## Structured concurrency (`StructuredTaskScope`)
 
-Preview in 21, finalized in Java 24 (JEP 499). The point: child tasks **live within the scope**, cancellation propagates, leaks are impossible.
+Java 21+ with `--enable-preview` (still in preview as of Java 25). The point: child tasks **live within the scope**, cancellation propagates, leaks are impossible.
 
 ```java
 try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
@@ -77,7 +77,7 @@ Rules:
   3. If you truly need per-thread caching, use `ScopedValue` for the lifetime of a request, or `remove()` in a `finally` at the exact lifetime boundary.
 - `InheritableThreadLocal` on virtual threads inherits from the **carrier** at fork time, not from the logical parent. Surprising results during structured concurrency — prefer `ScopedValue`.
 - Libraries that cache in `ThreadLocal` under the hood (Jackson's `BufferRecyclerPool` pre-2.16, `DateFormat` wrappers, SDK clients with "per-thread" builders): audit on migration. `-XX:NativeMemoryTracking=summary` plus `jcmd <pid> VM.native_memory summary` helps spot native buffers retained via `ThreadLocal`.
-- `ScopedValue` (preview in 21, finalized in Java 24 — JEP 487) — immutable, tied to the structured scope, no cleanup needed:
+- `ScopedValue` (Java 21+ with `--enable-preview`, still in preview as of Java 25) — immutable, tied to the structured scope, no cleanup needed:
   ```java
   static final ScopedValue<UserId> CURRENT = ScopedValue.newInstance();
 

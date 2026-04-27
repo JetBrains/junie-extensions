@@ -20,7 +20,7 @@ Project-specific policy for Compose code. Generic Compose API knowledge (Materia
 
 ## Navigation
 
-Patterns here assume Navigation 2 (`NavHost` / `NavController`). **Migrating to Navigation 3?** Install the external `navigation-3` skill from the community `android-skills-pack` (not shipped with this extension):
+**Navigation 3** (`androidx.navigation:navigation-compose:3.x`) is stable as of November 2025 and is the recommended path for new Compose projects — it gives you full ownership of the back stack as Compose state, enabling adaptive layouts and multi-pane UIs. Patterns in the rest of this file use Navigation 2 (`NavHost` / `NavController`) which is still fully supported; for Navigation 3 guidance install the external skill:
 `npx android-skills-pack install --target junie --skill navigation-3`
 
 ## Lifecycle & side effects
@@ -31,7 +31,8 @@ Patterns here assume Navigation 2 (`NavHost` / `NavController`). **Migrating to 
 
 ## Stability & recomposition
 
-- Mark data models used in composables as `@Immutable` (or `@Stable` if the instance is mutable but notifies observers).
+- **Primary approach (Compose 1.6+):** enable strong skipping mode in `composeCompiler {}` — the compiler skips recomposition for unstable parameters automatically without manual annotations.
+- `@Immutable` / `@Stable` are a last resort: use them only when the compiler still can't infer stability after strong skipping is on. Misapplied, they suppress recomposition incorrectly.
 - Always pass a stable `key` to `items(list, key = { it.id })` in `LazyColumn` / `LazyRow`.
 - Read theme tokens (`MaterialTheme.colorScheme.*`, `MaterialTheme.typography.*`) — never hardcode dp / sp / colors.
 

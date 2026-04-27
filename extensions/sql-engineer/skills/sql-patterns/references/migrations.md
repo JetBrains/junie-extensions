@@ -91,7 +91,7 @@ CREATE INDEX idx_orders_status ON orders(status) ALGORITHM=INPLACE LOCK=NONE;
 CREATE INDEX idx_orders_status ON orders(status) WITH (ONLINE = ON);
 ```
 
-Flyway: mark the migration file `-- flyway.nonTransactional=true` header (or split `CREATE INDEX CONCURRENTLY` into its own migration; Flyway will run outside a transaction if configured).
+Flyway: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction. Two options — (1) place it in a separate migration file and set `flyway.executeInTransaction=false` in `flyway.conf` or via a `.sql.conf` sidecar file (`executeInTransaction=false`); (2) use a `V__*.sql` file with only the `CREATE INDEX CONCURRENTLY` and mark it in the Flyway config. Note: there is **no** `-- flyway.nonTransactional=true` comment syntax.
 
 ### Rename / drop a table
 
@@ -112,7 +112,7 @@ Same expand-contract — route via a view first, let all consumers migrate, then
 
 ## Idempotency defensive patterns
 
-- `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS` — available on Postgres, MySQL 8.0.29+, SQLite 3.35+. Helpful for repairs and re-applies.
+- `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS` — available on Postgres, MySQL, SQLite. `ADD COLUMN IF NOT EXISTS` — Postgres only (`ALTER TABLE t ADD COLUMN IF NOT EXISTS`); **MySQL has no such syntax** — use a conditional check via `information_schema` or just rely on Flyway's checksum tracking. Helpful for repairs and re-applies.
 - For types/columns without `IF NOT EXISTS`, wrap in a `DO $$ ... EXCEPTION ... END $$` (Postgres) or a conditional in `information_schema`.
 - Don't over-idempotent — Flyway/Liquibase already track state. Use idempotency only where DDL isn't transactional (MySQL).
 

@@ -71,6 +71,7 @@ Detection: enable `spring.jpa.properties.hibernate.generate_statistics=true` + `
 - Default `maximum-pool-size=10`. The classic `pool = ((core_count * 2) + effective_spindle_count)` is a **DB-side capacity ceiling** (Brecht / PgBouncer guidance for how many concurrent connections the database can serve efficiently), **not** a prescription for the app pool size. Per app-instance pool is usually 10–30; across all instances stay under the DB ceiling. More connections ≠ more throughput — context switching and lock contention dominate past the ceiling.
 - Always set `spring.datasource.hikari.connection-timeout` (default 30s) and `max-lifetime` (shorter than DB/proxy idle timeout).
 - Leak detection in non-prod: `spring.datasource.hikari.leak-detection-threshold=5000`.
+- **MySQL 8.4+ removes `mysql_native_password`** (the old default auth plugin). If the DB user was created with `mysql_native_password`, connections fail with `Access denied` after upgrade. Fix: `ALTER USER 'app'@'%' IDENTIFIED WITH caching_sha2_password BY 'password';` and ensure the MySQL Connector/J driver is ≥ 8.0.33 (or ≥ 9.x) which supports `caching_sha2_password` over TLS.
 
 ## Cheat table — common errors and their cause
 

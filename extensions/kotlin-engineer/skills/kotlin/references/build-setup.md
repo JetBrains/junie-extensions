@@ -34,7 +34,7 @@ Assumes basic Gradle knowledge. This file is the setup policy and the compiler-p
 
 ## KSP vs kapt
 
-- **Prefer KSP (`com.google.devtools.ksp`)** — 2–3× faster than kapt, avoids the stub generation round-trip.
+- **Prefer KSP (`com.google.devtools.ksp`)** — significantly faster than kapt (2–7× depending on the processor), avoids the stub generation round-trip.
 - **Fall back to kapt only when** the processor doesn't have a KSP implementation (still a few legacy ones). Migrate when possible: Room, Moshi, Hilt all have KSP now.
 - Don't mix KSP and kapt for the same processor in the same module — conflicts, build slowdown.
 - kapt pitfall: `kapt` tasks ignore incremental compilation by default. Large multi-module projects waste minutes per build.
