@@ -1,55 +1,51 @@
 # Manual QA on Emulator
 
-Run scenarios on the emulator by visually inspecting the UI and verifying via logcat.
+Run scenarios on a connected emulator (or device) by inspecting the structured UI state and verifying via logcat. Describe **what you need** at each step — the runtime picks the right tool.
 
-**Rule of thumb:** UI + app lifecycle go through `mobile-mcp`; logs and system state go through `adb`.
-
-**Observation:** use `mobile_list_elements_on_screen` (structured UI tree) as the primary way to read screen state — it returns element text, resource-ids, and bounds without needing vision. Fall back to `mobile_take_screenshot` only when an element is missing from the tree (custom views, WebView, visual glitches).
+Device-layer rules (UI through `mobile-mcp`, prefer native over shell, declared fallback, element tree as primary observation channel) are defined in `guidelines/android.md` and apply throughout this workflow — not repeated here. If `mobile-mcp` cannot be enabled when a scenario needs UI driving, mark it `BLOCKED — mobile-mcp not enabled` and continue with the rest of the report.
 
 ## Steps
 
-1. **Understand what to test.** Identify the screen / feature. List scenarios to cover.
+1. **Understand what to test.** Identify the screen / feature. List the scenarios you will cover.
 
-2. **Check a device is available** — call `mobile_list_available_devices`. If the result is empty, follow `references/device-setup.md` to bring up an emulator (or ask the user to attach a physical device), then retry.
+2. **Make sure a device is available.** If no device is currently visible to the IDE, follow `references/device-setup.md` to bring up an emulator (or ask the user to attach a physical device).
 
-3. **Launch the app** — `mobile_launch_app` with the app's package name (replace `<package>` in all examples below with the actual one).
+3. **Clear the logcat ring buffer** so subsequent reads only contain the new run.
 
-4. **Reset state if needed** — `adb shell pm clear <package>` (mobile-mcp has no equivalent), then `mobile_launch_app` again.
+4. **Launch the app** by package name.
 
-5. **For each scenario, follow the closed loop:**
-   1. `mobile_list_elements_on_screen` — read current UI state (elements, texts, resource-ids).
-   2. Action via mobile-mcp:
-      - `mobile_click_on_screen_at_coordinates` (use coords from `mobile_list_elements_on_screen` for a given resource-id / text)
-      - `mobile_swipe_on_screen`
-      - `mobile_type_keys`
-      - `mobile_press_button BACK` / `HOME` / `ENTER`
-   3. `mobile_list_elements_on_screen` — verify UI changed as expected.
-   4. `adb logcat -d *:E | tail -20` — catch silent crashes.
+5. **Reset state if needed** — terminate the app, clear its application data, then launch it again. Use this whenever you need a clean first-run state, or whenever the previous scenario left the app in an unexpected state.
+
+6. **For each scenario, follow the closed loop:**
+   1. Read the on-screen element tree to capture the current UI state.
+   2. Perform an action — tap (use coordinates resolved from the tree by resource-id or text, never hardcoded pixels), swipe, type text, press a hardware button (BACK / HOME / ENTER), or set orientation.
+   3. Read the element tree again to verify the screen actually changed as expected.
+   4. Check recent errors in logcat (last ~20 ERROR-level entries) — or fetch the last fatal-exception block — to catch silent crashes.
    5. Mark: **PASS / FAIL / BUG**.
 
-   If an expected element is not visible in the tree → call `mobile_take_screenshot` to check for custom-drawn UI or visual regressions.
+   If an expected element is genuinely not visible in the tree (custom-drawn UI, WebView, suspected visual regression) → take a screenshot as a fallback. Otherwise stay on the tree.
 
-6. **Document bugs.** For each bug:
-   - UI element tree of the broken state (copy from `mobile_list_elements_on_screen` output).
+7. **Document bugs.** For each bug:
+   - The element tree of the broken state (copy from the observation step).
    - Exact steps to reproduce.
    - Expected vs actual behavior.
-   - Relevant logcat lines.
+   - Relevant logcat lines (recent errors or the last fatal-exception block).
 
 ## Common scenarios
 
 - **Happy path** — complete the main flow successfully.
 - **Empty state** — what shows with no data?
-- **Error state** — disconnect network: `adb shell svc wifi disable && adb shell svc data disable`.
-- **Edge input** — very long text, special characters, empty fields (via `mobile_type_keys`).
-- **Back navigation** — `mobile_press_button BACK` throughout the flow; does it work correctly?
-- **Rotation** — `mobile_set_orientation landscape` / `portrait` — does state persist?
-- **Permissions** — deny a permission: `adb shell pm revoke <package> android.permission.CAMERA`.
-- **Low memory** — `adb shell am send-trim-memory <package> MODERATE` (requires `android:debuggable="true"` or `adb root`; otherwise silently ignored — verify `onTrimMemory` in logcat).
-- **Dark mode** — `adb shell "cmd uimode night yes"`.
-- **Deep links** — `mobile_open_url "myapp://some/path"`.
+- **Error state** — disconnect the network (toggle Wi-Fi off, toggle mobile data off).
+- **Edge input** — very long text, special characters, empty fields.
+- **Back navigation** — press BACK throughout the flow; does it work correctly?
+- **Rotation** — switch orientation between landscape and portrait — does state persist?
+- **Permissions** — revoke a runtime permission (e.g. CAMERA) to test the deny path; grant it back to test the granted path.
+- **Dark mode** — enable system-wide dark mode (note: it affects all apps on the device).
+- **Deep links** — open a `myapp://...` URL on the device.
+- **ANR diagnosis** — when an ANR is suspected, read ANR traces (only available on debuggable / userdebug builds).
 
 ## Notes
 
-- Don't hardcode pixel coordinates: call `mobile_list_elements_on_screen` to resolve the element by resource-id or text, then pass its bounds center to `mobile_click_on_screen_at_coordinates`. This is resilient to screen size and rotation.
-- For text input: first tap the field to focus it, confirm it's focused via `mobile_list_elements_on_screen`, then `mobile_type_keys`.
-- `adb` is only needed for: **logcat, `pm clear`, `pm grant/revoke`, `svc wifi/data`, `settings put`, ANR pull, `forward`/`reverse`, file `push`/`pull`**. Everything else is `mobile-mcp`.
+- Don't hardcode pixel coordinates: resolve elements through the on-screen element tree (by resource-id or text) and tap their bounds-center. This is resilient to screen size and rotation.
+- For text input: first tap the field to focus it, confirm focus via the element tree, then type.
+- For actions that are deliberately not covered by a native tool (`bugreport` dumps, arbitrary file push/pull on the device, port forwarding, raw `dumpsys`), prefer to note them as a tool gap and continue with the rest of the scenario. If the scenario truly cannot proceed without one, a direct `adb` call is acceptable as a declared fallback — record what you ran and why in the scenario notes.

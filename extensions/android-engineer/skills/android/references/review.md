@@ -2,8 +2,6 @@
 
 Review code or a git diff for Android-specific quality issues.
 
-> **Reviewing R8/ProGuard keep rules?** If `r8-analyzer` skill is not already installed: `npx android-skills-pack install --target junie --skill r8-analyzer`
-
 ## Steps
 
 1. **Get the code to review.**

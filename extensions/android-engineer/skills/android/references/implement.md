@@ -2,8 +2,6 @@
 
 Step-by-step workflow for adding a new feature or screen to an Android app.
 
-> **Google Android skills-pack:** for domain tasks (edge-to-edge for SDK 35+, Play Billing upgrades, etc.) check `npx android-skills-pack list` first and install a matching skill with `npx android-skills-pack install --target junie --skill <name>`. If no exact match, pick the closest one from the list or proceed without.
-
 ## Steps
 
 1. **Restate the task in one sentence.** Identify which layers are affected: UI only, ViewModel, Repository, or all layers.
@@ -32,9 +30,9 @@ Step-by-step workflow for adding a new feature or screen to an Android app.
    - Reuse theme tokens (`MaterialTheme.colorScheme`, `MaterialTheme.typography`, dimen resources).
    - Add strings to `strings.xml`, never inline.
 
-6. **Build & check.** Run `./gradlew assembleDebug`. Fix all compilation errors before continuing.
+6. **Build & check.** Build the debug APK (gradle task `:app:assembleDebug`) using the available build capability. Fix all compilation errors before continuing.
 
-7. **Verify on emulator.** Launch the app, navigate to the screen, call `mobile_list_elements_on_screen` and confirm the expected elements are present and in the correct state.
+7. **Verify on emulator.** Launch the app, navigate to the screen, read the on-screen element tree, and confirm the expected elements are present and in the correct state.
 
 ## Notes
 
