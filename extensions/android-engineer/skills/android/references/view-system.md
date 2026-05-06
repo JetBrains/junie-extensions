@@ -8,11 +8,6 @@ Project-specific policy for Android projects using XML layouts, ViewBinding, Rec
 - `buildFeatures { viewBinding = true }` in `build.gradle.kts`, or task explicitly says "don't add Compose".
 - Compose dependency is absent from `libs.versions.toml`.
 
-## Java → Kotlin migration
-
-If migrating Java files to Kotlin and `kotlin-tooling-java-to-kotlin` skill is not installed:
-`npx skills add Kotlin/kotlin-agent-skills --skill kotlin-tooling-java-to-kotlin -a junie -y`
-
 ## Review checklist for View system code
 
 - `_binding = null` in `onDestroyView()` — prevents leaking the view hierarchy into the Fragment.

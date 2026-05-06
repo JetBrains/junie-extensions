@@ -2,38 +2,36 @@
 
 How to get a working Android device (emulator or physical) before running any skill that needs one (`qa.md`, `debug.md`, autonomous QA agent).
 
+Describe what you need at each step — the runtime picks the right tool. Prefer native capabilities over `adb` / `emulator`; a direct shell call is acceptable only as a **declared fallback** when a needed capability is missing or fails in the current environment (say which one and why).
+
 ## 1. Preflight check
 
-Call **`mobile_list_available_devices`**.
+List the devices currently visible to the IDE.
 
-- Returns a device → proceed with the task.
-- Returns empty → continue to step 2.
+- At least one online device → use it for the task.
+- No device → continue to step 2.
 
-## 2. Find the `emulator` binary
+## 2. Pick an AVD to start
 
-Try these in order, stop on the first that works:
+List available AVDs on the host.
 
-1. `emulator -list-avds` — works if `emulator` is in `PATH`.
-2. `$ANDROID_HOME/emulator/emulator -list-avds` — if `$ANDROID_HOME` is set.
-3. `~/Library/Android/sdk/emulator/emulator -list-avds` — macOS default Android Studio path.
-4. `~/Android/Sdk/emulator/emulator -list-avds` — Linux default Android Studio path.
+- At least one AVD → take the first one (or one explicitly chosen by the user) and continue to step 3.
+- None → continue to step 4.
 
-If all four fail (`command not found` / no such file) → go to step 4.
+## 3. Start the emulator
 
-## 3. Launch the first AVD
+Start the chosen AVD. On success the result includes the adb serial of the freshly booted emulator (e.g. `emulator-5554`); use that serial for subsequent device-targeted actions.
 
-Take the first line from the `-list-avds` output of step 2 — that's `<avd-name>`. Launch it in the background using the same `emulator` path that worked:
+On failure, the result contains a diagnostic message (SDK not configured, emulator binary missing, AVD not found, boot timeout). Surface it to the user — do not retry blindly.
 
-```
-<emulator-path> -avd <avd-name> >/dev/null 2>&1 &
-```
+## 4. No AVDs available
 
-Then retry `mobile_list_available_devices` every few seconds until it returns a device (boot typically takes 30–120 s on first launch).
+Create a new Pixel-class AVD with the latest installed `google_apis` system image matching the host architecture, then go to step 3 with the freshly created AVD.
 
-If `-list-avds` returned empty (no AVD configured) → go to step 4.
+If creation fails with a message like *"No installed 'google_apis' system image found ..."*, fall through to step 5: the host has no usable system image, and the agent does **not** download SDK packages on its own.
 
-## 4. Fallback — ask the user
+## 5. Fallback — ask the user
 
-> Please start an emulator from Android Studio (Device Manager → ▶) or attach a physical device with USB debugging enabled, then let me know.
+> No AVD is available and no `google_apis` system image is installed on this host. Please open Android Studio → Tools → SDK Manager and install a system image (e.g. `Google APIs Intel x86_64 Atom System Image` for the latest API level), then let me know — or attach a physical device with USB debugging enabled.
 
-Do **not** try to install the Android SDK, create AVDs, or download system images autonomously — it's heavy, interactive, and usually fails without human input.
+Do **not** try to install the Android SDK, accept licenses, or download system images autonomously — it's heavy, interactive, and usually fails without human input.

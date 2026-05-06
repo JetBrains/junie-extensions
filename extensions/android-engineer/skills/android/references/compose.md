@@ -2,9 +2,6 @@
 
 Project-specific policy for Compose code. Generic Compose API knowledge (Material 3, `LazyColumn`, `LaunchedEffect`, Hilt boilerplate, animation APIs) is assumed — don't re-derive it here.
 
-> **Migrating XML → Compose?** Install the external `migrate-xml-views-to-jetpack-compose` skill from the community `android-skills-pack` (not shipped with this extension):
-> `npx android-skills-pack install --target junie --skill migrate-xml-views-to-jetpack-compose`
-
 ## State management
 
 - Prefer a **sealed interface** for UI state (`Loading` / `Success(data)` / `Error(msg)`) — prevents invalid combinations like user + error both set.
@@ -20,8 +17,7 @@ Project-specific policy for Compose code. Generic Compose API knowledge (Materia
 
 ## Navigation
 
-**Navigation 3** (`androidx.navigation:navigation-compose:3.x`) is stable as of November 2025 and is the recommended path for new Compose projects — it gives you full ownership of the back stack as Compose state, enabling adaptive layouts and multi-pane UIs. Patterns in the rest of this file use Navigation 2 (`NavHost` / `NavController`) which is still fully supported; for Navigation 3 guidance install the external skill:
-`npx android-skills-pack install --target junie --skill navigation-3`
+**Navigation 3** (`androidx.navigation:navigation-compose:3.x`) is stable as of November 2025 and is the recommended path for new Compose projects — it gives you full ownership of the back stack as Compose state, enabling adaptive layouts and multi-pane UIs. Patterns in the rest of this file use Navigation 2 (`NavHost` / `NavController`) which is still fully supported.
 
 ## Lifecycle & side effects
 

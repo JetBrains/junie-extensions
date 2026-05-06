@@ -1,14 +1,14 @@
 # Writing & Running Tests
 
-Unit tests (VM / UseCase / Repository) and UI tests (Compose / Espresso).
+Unit tests (VM / UseCase / Repository) and UI tests (Compose / Espresso). Run gradle test tasks through the available build/test capabilities — do not invoke `gradlew` from a shell yourself.
 
 ## Choose the right test type
 
-| Type | Location | Tools | Run |
-|------|----------|-------|-----|
-| Unit (logic) | `src/test/` | JUnit5 (requires `de.mannodermaus.junit5` Gradle plugin — not built into AGP; if the project uses JUnit4, skip the plugin), MockK, kotlinx-coroutines-test, Turbine | `./gradlew test` |
-| UI / Integration | `src/androidTest/` | Compose Testing, Espresso, Hilt test rules | `./gradlew connectedAndroidTest` |
-| Screenshot | `src/androidTest/` or Paparazzi | Paparazzi / Showkase / Shot | `./gradlew verifyPaparazziDebug` |
+| Type | Location | Tools | Gradle task |
+|------|----------|-------|-------------|
+| Unit (logic) | `src/test/` | JUnit5 (requires `de.mannodermaus.junit5` Gradle plugin — not built into AGP; if the project uses JUnit4, skip the plugin), MockK, kotlinx-coroutines-test, Turbine | `test` |
+| UI / Integration | `src/androidTest/` | Compose Testing, Espresso, Hilt test rules | `connectedAndroidTest` |
+| Screenshot | `src/androidTest/` or Paparazzi | Paparazzi / Showkase / Shot | `verifyPaparazziDebug` |
 
 ## What to cover
 
@@ -19,14 +19,14 @@ Unit tests (VM / UseCase / Repository) and UI tests (Compose / Espresso).
 
 ## Running
 
-```bash
-./gradlew test                                    # all unit tests
-./gradlew test --tests "*.UserViewModelTest"      # single class
-./gradlew connectedAndroidTest                    # instrumented tests
-./gradlew :app:connectedDebugAndroidTest --tests "*.UserScreenTest"
-```
+Use the available test capability and pass the gradle task plus an optional filter:
 
-Report: `app/build/reports/tests/test/index.html`.
+- task `test` — all JVM unit tests.
+- task `test --tests "*.UserViewModelTest"` — single class.
+- task `connectedAndroidTest` — instrumented tests on the currently connected device / emulator.
+- task `:app:connectedDebugAndroidTest --tests "*.UserScreenTest"` — single instrumented class.
+
+HTML report: `app/build/reports/tests/test/index.html`.
 
 ## Rules
 
@@ -35,4 +35,4 @@ Report: `app/build/reports/tests/test/index.html`.
 - When testing a **ViewModel** in isolation, mocking the Repository is fine — the Repository has its own dedicated test.
 - Use `UnconfinedTestDispatcher` for simple cases, `StandardTestDispatcher` when you need manual control.
 - For Flow, use **Turbine** (`flow.test { ... awaitItem() }`).
-- For UI tests that require visual confirmation, call `mobile_list_elements_on_screen` after the test and assert expected elements are present.
+- For UI tests that require visual confirmation on a running emulator, read the on-screen element tree after the test and assert the expected elements are present.
