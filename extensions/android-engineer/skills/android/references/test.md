@@ -10,13 +10,6 @@ Unit tests (VM / UseCase / Repository) and UI tests (Compose / Espresso).
 | UI / Integration | `src/androidTest/` | Compose Testing, Espresso, Hilt test rules | `./gradlew connectedAndroidTest` |
 | Screenshot | `src/androidTest/` or Paparazzi | Paparazzi / Showkase / Shot | `./gradlew verifyPaparazziDebug` |
 
-## What to cover
-
-- **Happy path** — normal success.
-- **Error path** — network error, null / empty inputs, timeouts.
-- **Edge cases** — empty list, zero / max values, very long strings, rapid-fire calls.
-- **State transitions** — Loading → Success, Loading → Error, retry after Error.
-
 ## Running
 
 ```bash

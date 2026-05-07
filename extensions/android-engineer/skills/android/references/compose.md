@@ -36,6 +36,17 @@ Project-specific policy for Compose code. Generic Compose API knowledge (Materia
 - Always pass a stable `key` to `items(list, key = { it.id })` in `LazyColumn` / `LazyRow`.
 - Read theme tokens (`MaterialTheme.colorScheme.*`, `MaterialTheme.typography.*`) — never hardcode dp / sp / colors.
 
+## Previews
+
+To see how composables look without running the app, use the headless preview renderer. It renders all `@Preview`-annotated composables in the file and returns images per preview — no editor or split view required, works on any file in the project.
+
+Use this when:
+- Verifying layout changes quickly before a full device run.
+- Checking that a composable handles all UI states (Loading / Error / Empty / Content).
+- Debugging theme or dimension issues without deploying.
+
+Each result includes a failure reason (`BuildFailed`, `InflateFailed`, `RenderFailed`) when rendering fails — rebuild the project or check logcat if you see these.
+
 ## Pitfalls LLMs get wrong
 
 **`remember` without a key when the input changes:**

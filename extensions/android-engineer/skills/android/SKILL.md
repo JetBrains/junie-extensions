@@ -1,11 +1,11 @@
 ---
 name: android
-description: Senior Android engineer workflows — Kotlin-first (Java legacy supported), Jetpack Compose + View system, MVVM, Coroutines/Flow, Room, Retrofit, Hilt, plus device orchestration via mobile-mcp (UI element tree, taps, swipes, install, launch) with ADB as fallback for logcat, pm clear, permissions and system settings. Use when implementing features, debugging crashes, fixing builds, writing tests, reviewing Android code, or running QA on an emulator.
+description: Senior Android engineer workflows — Kotlin-first (Java legacy supported), Jetpack Compose + View system, MVVM, Coroutines/Flow, Room, Retrofit, Hilt, plus device orchestration via plugin tools (device management, logcat, crash reports, app run) and mobile-mcp for UI interaction (element tree, taps, swipes). Use when implementing features, debugging crashes, fixing builds, writing tests, reviewing Android code, or running QA on an emulator.
 ---
 
 # Android
 
-Senior Android developer workflows. Covers both the **codebase layer** (Kotlin / Compose / MVVM / Coroutines / Room / Retrofit) and the **device layer** (mobile-mcp for UI and app lifecycle, ADB as fallback for system state).
+Senior Android developer workflows. Covers both the **codebase layer** (Kotlin / Compose / MVVM / Coroutines / Room / Retrofit) and the **device layer** (plugin tools for device management and diagnostics, mobile-mcp for UI interaction).
 
 > **Self-contained.** This skill does not require `kotlin-engineer`. All Kotlin/coroutine rules relevant for Android are included here.
 
@@ -21,8 +21,7 @@ Senior Android developer workflows. Covers both the **codebase layer** (Kotlin /
 | Write & run tests | `references/test.md` | Unit tests (VM/UseCase) or Compose/Espresso UI tests |
 | Code review | `references/review.md` | Reviewing diff for leaks, threading, lifecycle, perf |
 | Manual QA on emulator | `references/qa.md` | Running scenarios on device, visual verification |
-| Device setup / emulator bootstrap | `references/device-setup.md` | `mobile_list_available_devices` returns empty, need to bring up an emulator |
-| ADB cheat sheet | `references/adb.md` | Need logcat, `pm clear`, permissions, pull, system settings |
+| Device setup / emulator bootstrap | `references/device-setup.md` | No device available, need to bring up an emulator |
 | Mobile MCP usage | `references/mobile-mcp.md` | Reading UI element tree, taps, swipes, text input via mobile-mcp |
 
 ## Google Official Skills
@@ -50,14 +49,14 @@ action (mobile-mcp: mobile_click_on_screen_at_coordinates / mobile_swipe_on_scre
      ↓
 mobile_list_elements_on_screen        → verify UI changed as expected
      ↓
-adb logcat -d *:E | tail -30          → catch silent crashes
+read logcat                           → catch silent crashes
 ```
 
 Use `mobile_list_elements_on_screen` as the primary observation tool — it returns structured element data (text, resource-id, bounds) that the agent can read directly without vision.
 
 `mobile_take_screenshot` is a **fallback only**: use it when elements are missing from the tree (custom views, games, WebView content, visual layout issues).
 
-`mobile-mcp` = eyes & hands + app lifecycle (UI, install, launch). `adb` = system access only (logs, permissions, system state).
+Plugin tools = device management + app lifecycle + diagnostics. mobile-mcp = UI interaction.
 
 ## Key Patterns
 
@@ -100,36 +99,6 @@ fun UserScreen(vm: UserViewModel = hiltViewModel()) {
 
 Full Repository / Retrofit / Fragment examples → `references/implement.md`.
 
-## Quick device commands
-
-**Prefer mobile-mcp** for everything UI / app lifecycle:
-
-- `mobile_list_available_devices` — list devices / emulators.
-- `mobile_install_app <path-to.apk>` — install build output.
-- `mobile_launch_app com.example.app` / `mobile_terminate_app com.example.app`.
-- `mobile_list_elements_on_screen` — **primary observation tool**: structured UI tree (text, resource-id, bounds).
-- `mobile_click_on_screen_at_coordinates`, `mobile_swipe_on_screen`, `mobile_type_keys`, `mobile_press_button BACK|HOME|ENTER`, `mobile_set_orientation`, `mobile_open_url`.
-- `mobile_take_screenshot` — fallback only when elements are not visible in the tree.
-
-**ADB only for what mobile-mcp can't do:**
-
-```bash
-adb shell pm clear com.example.app           # reset app state (no mobile-mcp equivalent)
-adb logcat -d -v brief *:E | tail -100       # recent errors only (always -d)
-adb logcat -d --pid=$(adb shell pidof -s com.example.app)  # logs for app process
-adb pull /data/anr/traces.txt                # ANR traces
-adb shell pm grant com.example.app android.permission.CAMERA
-adb shell svc wifi disable                   # toggle network for QA
-```
-
-**Gradle (not device-related):**
-
-```bash
-./gradlew assembleDebug                      # build the app
-./gradlew test                               # unit tests
-./gradlew connectedAndroidTest               # instrumented tests on device
-```
-
 ## Output Format
 
 When implementing a feature:
@@ -146,10 +115,9 @@ When running QA: follow the core loop — observe → act → verify. Delegate l
 
 **MUST DO:**
 - Use Kotlin, Jetpack Compose, MVVM, Coroutines/Flow.
-- Use **mobile-mcp** for device listing, install/uninstall, launch/terminate, UI element tree, taps, swipes, text input, back/home, orientation, open-url — never shell out to `adb` for those.
-- Use **ADB** only for: `logcat`, `pm clear`, `pm grant`/`revoke`, `svc wifi`/`data`, `settings put`, ANR `pull`, `forward`/`reverse`, `push`/`pull`, `getprop`/`dumpsys`.
-- Wrap every UI action with `mobile_list_elements_on_screen` before and after, plus `adb logcat -d *:E | tail -30` after.
-- Always pass `-d` to `adb logcat` in agent contexts — without it the command streams forever and hangs the agent session.
+- Use **plugin tools** for device management (list/start/stop emulator), app lifecycle (run/install/clear), diagnostics (logcat, crashes, ANR), permissions, and system settings.
+- Use **mobile-mcp** for UI interaction: element tree, taps, swipes, text input, back/home, orientation, open-url.
+- Wrap every UI action with `mobile_list_elements_on_screen` before and after, plus log check after.
 - When unit-testing, mock at the `ApiService` / `Dao` boundary so the Repository logic (cache-first, API fallback, error mapping) is actually exercised. See `references/test.md`.
 - Reuse existing architecture patterns; read 2–3 similar features before adding a new one.
 
@@ -159,8 +127,6 @@ When running QA: follow the core loop — observe → act → verify. Delegate l
 - Call `runBlocking` on the main thread.
 - Swallow exceptions with empty `catch` blocks.
 - Hardcode dp/sp/colors — use `MaterialTheme` / theme tokens.
-- Run `adb logcat` without `-d` — it streams forever and hangs the agent session.
-- Shell out to `adb shell input tap|swipe|text|keyevent`, `adb install`, `adb shell am start`, `adb shell am force-stop`, `pm list packages`, `screencap`, `uiautomator dump`, `adb devices` — use the corresponding mobile-mcp tool instead.
 - Bypass failing tests with `@Ignore`, skip flags, or weakened assertions.
 
 ## Dedicated agent

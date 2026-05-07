@@ -34,7 +34,7 @@ Step-by-step workflow for adding a new feature or screen to an Android app.
 
 6. **Build & check.** Run `./gradlew assembleDebug`. Fix all compilation errors before continuing.
 
-7. **Verify on emulator.** Launch the app, navigate to the screen, call `mobile_list_elements_on_screen` and confirm the expected elements are present and in the correct state.
+7. **Verify on emulator.** Run the app (one command handles build + install + launch). Navigate to the screen, call `mobile_list_elements_on_screen` and confirm the expected elements are present and in the correct state.
 
 ## Notes
 

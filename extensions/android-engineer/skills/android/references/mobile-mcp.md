@@ -33,29 +33,9 @@ The following actions MUST go through mobile-mcp — **do not shell out to `adb`
 | Read screen size | `mobile_get_screen_size` | ~~`adb shell wm size`~~ (reads dimensions) |
 | Rotate device | `mobile_set_orientation` | ~~`adb shell settings put system user_rotation`~~ |
 
-## What mobile-mcp does NOT do — use ADB
-
-mobile-mcp has no tool for any of these, so the agent must fall back to `adb` via shell:
-
-| Need | ADB command |
-|------|-------------|
-| Read crashes / errors | `adb logcat -d *:E \| tail -N` |
-| Logs by app PID | `adb logcat -d --pid=$(adb shell pidof -s com.pkg)` |
-| Clear buffer before reproducing | `adb logcat -c` |
-| Reset app data (no uninstall) | `adb shell pm clear com.pkg` |
-| ANR traces | `adb pull /data/anr/traces.txt` |
-| Grant / revoke runtime permissions | `adb shell pm grant \| pm revoke com.pkg <permission>` |
-| Toggle Wi-Fi / data | `adb shell svc wifi disable\|enable` / `svc data …` |
-| System settings (dark mode, airplane, locale) | `adb shell cmd uimode night yes`, `settings put …` |
-| Port forwarding | `adb forward tcp:… tcp:…` / `adb reverse …` |
-| Push / pull arbitrary files | `adb push`, `adb pull` |
-| Device build info | `adb shell getprop ro.build.version.release` |
-| Bug report | `adb bugreport bugreport.zip` |
-| Running `./gradlew` | not device-related, but part of the same flow |
-
 ## Troubleshooting
 
-- **No device found** → `mobile_list_available_devices` returned empty. See `references/device-setup.md` to bring up an emulator (tries to find the `emulator` binary in `PATH` / `$ANDROID_HOME` / Android Studio default SDK path, then launches the first AVD), or ask the user to attach a physical device.
+- **No device found** → `mobile_list_available_devices` returned empty. See `references/device-setup.md` to bring up an emulator, or ask the user to attach a physical device.
 - **Element not found by label** → call `mobile_list_elements_on_screen`, pick by resource-id / content-desc; fall back to coordinates.
 - **Typing lands in wrong field** → tap the field first to focus, verify it's focused via `mobile_list_elements_on_screen`, then `mobile_type_keys`.
 - **Screenshot is black** → content uses `FLAG_SECURE` (DRM, banking, password fields); nothing the agent can do.

@@ -45,16 +45,26 @@ Project-level conventions for Android codebases. Junie MUST follow these rules w
 - Mock at the **`ApiService` / `Dao` boundary** and exercise the Repository as a unit — its cache-first / fallback / error-mapping logic must be tested, not stubbed. Mocking the Repository is only acceptable inside ViewModel tests.
 - Test name convention: `` `given [precondition] when [action] then [expected result]` ``.
 
+## Security
+- Set `android:exported` explicitly (`true` or `false`) on every Activity, Service, and BroadcastReceiver that has an `<intent-filter>` — required on Android 12+ (targetSdk 31+), the build fails without it.
+- On Android 14+ (targetSdk 34+): `android:foregroundServiceType` is mandatory on every Foreground Service — missing it causes `SecurityException` at runtime.
+- Never hardcode API keys or secrets in source code — use `local.properties` or environment variables.
+- Set `usesCleartextTraffic="false"` unless explicitly required.
+
 ## Build & Dependencies
 - Use `build.gradle.kts` (Kotlin DSL), not Groovy.
 - Use **version catalogs** (`libs.versions.toml`) for dependency management.
-- Never commit API keys or secrets — use `local.properties` or environment variables.
+- Never commit generated files or build artifacts.
 
 ## Device / Emulator Work
-- The agent has two layers for device interaction:
-  - **mobile-mcp** (UI + app lifecycle) — device listing, install/uninstall, launch/terminate, UI element tree, taps, swipes, text input, orientation, open-url.
-  - **ADB** via shell (system layer only) — `logcat`, `pm clear`, `pm grant`/`revoke`, `svc wifi/data`, `settings put`, ANR/file `pull`, `forward`/`reverse`, `getprop`/`dumpsys`.
-- Device listing, install, launch, taps, swipes, text input, back/home, orientation and URL opening MUST go through mobile-mcp — never `adb shell input …`, `am start`, `adb install`, `pm list packages`, `adb devices`, `screencap` or `uiautomator dump`.
-- Every UI action MUST be wrapped with: **`mobile_list_elements_on_screen` → action → `mobile_list_elements_on_screen` → `adb logcat -d *:E | tail -N`**. No blind taps.
-- Use `mobile_take_screenshot` only as a fallback when elements are absent from the tree (custom-drawn views, WebView, games).
-- `adb logcat` MUST always be invoked with `-d` — without it the command streams forever and hangs the agent session.
+
+Two layers for device interaction, in priority order:
+
+1. **Plugin tools** (device management, app lifecycle, diagnostics) — listing devices and AVDs, starting/stopping emulators, building and running the app, reading logcat, getting crash reports and ANR traces, clearing app data, granting/revoking permissions, toggling network and dark mode, rendering Compose previews.
+2. **mobile-mcp** (UI interaction only) — reading the UI element tree, tapping, swiping, text input, back/home buttons, orientation changes, opening URLs.
+
+When implementing or changing Compose UI, use the headless preview renderer to verify layout before running the app on device — it renders all `@Preview` composables in the file instantly without a full build or device run.
+
+Every UI action via mobile-mcp MUST be wrapped with: **`mobile_list_elements_on_screen` → action → `mobile_list_elements_on_screen`**. No blind taps.
+
+Use `mobile_take_screenshot` only as a fallback when elements are absent from the tree (custom-drawn views, WebView, games).
