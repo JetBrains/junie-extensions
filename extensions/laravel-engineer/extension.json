@@ -1,4 +1,4 @@
 {
   "name": "laravel-engineer",
-  "description": "Complete Laravel guide: Eloquent ORM, routing, Form Requests, API Resources, authentication, queues, events, testing with Pest/PHPUnit, and Spatie coding standards. Includes toolchain setup and post-generation quality pipeline."
+  "description": "Laravel architecture guide: Services vs Actions decision table, thin controllers, Form Requests, API Resources, Larastan verification, and API versioning. Architectural overlay on top of Laravel best-practices skills."
 }

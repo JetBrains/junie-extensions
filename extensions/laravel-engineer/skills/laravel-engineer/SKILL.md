@@ -1,46 +1,53 @@
 ---
 name: laravel-engineer
-description: Use when working on Laravel projects. Covers architecture patterns, thin controllers, Services/Actions, Form Requests, and API Resources. Ensures Laravel Boost is set up for project-aware AI assistance.
+description: Use when working on Laravel projects. Covers architecture decisions (Services vs Actions), thin controllers, Form Requests, API Resources, and API versioning. Enforces Larastan verification after code generation.
 ---
 
 # Laravel Engineer
 
-> **Self-contained.** This skill intentionally ships **without a `references/` directory**.
-> Deep, project-aware Laravel guidance (version-specific idioms, package rules, routes/schema/log introspection) is delivered by **Laravel Boost** at runtime — it installs the matching best-practices skills and MCP tools into the project. This SKILL.md only encodes the policy + pitfalls that Boost does not cover (architecture layering, anti-patterns, output contract).
-
 ## Core Workflow
 
-1. **Check toolchain** — run Setup Check below before doing anything else
-2. **Design first** — for non-trivial tasks, confirm approach before coding
-3. **Implement** — follow architecture rules below: thin controllers, Form Requests, Services/Actions
-4. **Verify** — run `./vendor/bin/phpstan analyse` after generating code
+1. **Design first** — for non-trivial tasks, confirm approach before coding: which layer (Service/Action/Job?), data model changes, auth requirements
+2. **Implement** — follow architecture rules below: thin controllers, Form Requests, Services/Actions
+3. **Verify** — run `./vendor/bin/phpstan analyse` (Larastan) after generating code
 
-## Setup Check
+## Services vs Actions — Pick One
 
-**Strongly recommended.** Laravel Boost is how this skill delegates project-specific knowledge. If the project cannot or will not use Boost, proceed with the rules below alone and state that assumption in your plan.
+The most common mistake: generating a Service where an Action fits, or vice versa.
 
-### Step 1 — Is `laravel/boost` installed?
+| Pattern | When to use | Example |
+|---------|-------------|---------|
+| **Action** | Single operation, called in one place, no shared state | `CreateOrderAction`, `SendWelcomeEmailAction` |
+| **Service** | Reusable across multiple callers, wraps a capability | `PaymentGatewayService`, `GeocodingService` |
+| **Job** | Async / background work, retry semantics needed | `ProcessImportJob`, `SendBulkEmailJob` |
 
-Read `composer.json`. Look for `laravel/boost` in `require` or `require-dev`.
+- An Action called from only one controller is fine — don't extract to a Service
+- A Service called from only one place should be an Action
+- Never introduce a Command Bus where a simple Action call works
 
-- Found → continue to Step 2
-- Not found → **suggest installing** (do not install silently):
-  ```
-  composer require --dev laravel/boost
-  ```
+## Static Analysis
 
-### Step 2 — Has `boost:install` been run?
+Use **Larastan** (not raw PHPStan) for Laravel-aware type checking:
 
-Read `boost.json` in the project root. Check that `"guidelines": true` is present.
+```bash
+composer require --dev nunomaduro/larastan
+```
 
-- `boost.json` exists and `"guidelines": true` → proceed with the task
-- `boost.json` missing or `"guidelines"` is not `true` → **suggest running:**
-  ```
-  php artisan boost:install
-  ```
+Target **level 5+** for new projects. On legacy code, baseline existing violations first, then climb:
 
-`boost:install` generates project-specific AI guidelines, installs Laravel best practices skills, and configures MCP tools (routes, schema, logs, Tinker). Without it the AI has no project context — fall back to the Constraints section of this file as the only source of truth.
+```bash
+./vendor/bin/phpstan analyse --level=5
+./vendor/bin/phpstan analyse --generate-baseline  # baseline legacy violations
+```
 
+Never ship code that fails at the project's configured level.
+
+## API Versioning
+
+For APIs expected to evolve:
+- URI path versioning is standard: `/api/v1/resource`
+- Version only when breaking changes exist — don't pre-version everything
+- Add `Deprecation` response header before removing old endpoints
 
 ## Constraints
 
@@ -50,7 +57,7 @@ Read `boost.json` in the project root. Check that `"guidelines": true` is presen
 |------|----------------|
 | Validate in Form Requests | `class StorePostRequest extends FormRequest` |
 | Transform in Resources | `class PostResource extends JsonResource` |
-| Business logic in Services or Actions | `OrderService::create()`, `CreateOrderAction::handle()` |
+| Business logic in Services or Actions | `OrderService::calculate()`, `CreateOrderAction::handle()` |
 | Use `$fillable` or `$guarded` | Never leave both empty |
 | Eager-load relationships | `Order::with('items', 'user')->get()` |
 | Use casts for types | `'status' => OrderStatus::class` in `$casts` |
@@ -61,12 +68,13 @@ Read `boost.json` in the project root. Check that `"guidelines": true` is presen
 - Put business logic in controllers
 - Use `DB::table()` when an Eloquent model exists
 - Call `->get()` inside a loop (N+1)
-- Use `$request->all()` for mass assignment
+- Use `$request->all()` for mass assignment — use `$request->validated()`
 - Leave relationships un-eager-loaded in collection endpoints
 - Return raw arrays from controllers instead of Resources
 - Use `Auth::user()` directly in service layer — pass user as parameter
-- Use `app()` or `resolve()` as service locator — use constructor injection instead
-- Store passwords in plain text — use `Hash::make()`, never raw `md5()` or `sha1()`
+- Use `app()` or `resolve()` as service locator — use constructor injection
+- Store passwords in plain text — use `Hash::make()`, never `md5()` or `sha1()`
+- Over-engineer: don't add Services/Actions/Command Bus for simple CRUD that a single controller method handles fine
 
 ## Output Format
 

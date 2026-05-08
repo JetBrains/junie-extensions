@@ -7,21 +7,23 @@ Junie extension that turns the agent into a disciplined Laravel engineer: enforc
 Baseline Laravel knowledge is assumed — the extension does not re-teach Eloquent, routing, or middleware. Instead it encodes:
 
 - **Policy** — MUST / MUST NOT rules for architecture and security.
-- **Setup awareness** — requires `laravel/boost` to be installed and configured; `boost:install` generates project-specific AI guidelines, installs best-practice skills, and configures MCP tools (routes, schema, logs, Tinker). Without it the agent has no project context.
+- **Architecture decisions** — Services vs Actions vs Jobs decision table to prevent the most common LLM mistake: generating the wrong abstraction layer.
+- **Static analysis** — Larastan (Laravel-aware PHPStan) as a mandatory verification step after code generation.
 
 ## What it covers
 
-- Architecture: thin controllers, Form Requests for validation, API Resources for transformation, Services/Actions for business logic.
+- Architecture: thin controllers, Form Requests for validation, API Resources for transformation, Services/Actions for business logic, with a clear decision table for when to use each.
 - Eloquent discipline: `$fillable` / `$guarded`, eager loading, typed casts, scopes.
 - Security: `Hash::make()` for passwords, no `$request->all()` mass assignment, constructor injection over service locator.
+- Static analysis: Larastan at level 5+, baseline workflow for legacy projects.
+- API versioning: URI path versioning, deprecation headers.
 - Output order: migration → model → form request → service/action → controller → resource → Pest tests.
 
 ## Requirements
 
 - Laravel project with `composer.json`.
-- `laravel/boost` installed (`composer require --dev laravel/boost`) and initialized (`php artisan boost:install`).
-- PHPStan via `vendor/bin/phpstan` — run after generating code.
+- Larastan via `composer require --dev nunomaduro/larastan` — run after generating code.
 
 ## Installation
 
-Drop the extension folder into your Junie extensions directory and enable it. The agent will check for `laravel/boost` on every task and prompt you to install it if missing.
+Drop the extension folder into your Junie extensions directory and enable it.
