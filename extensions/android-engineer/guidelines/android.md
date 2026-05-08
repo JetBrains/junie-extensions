@@ -63,6 +63,8 @@ Two layers for device interaction, in priority order:
 1. **Plugin tools** (device management, app lifecycle, diagnostics) — listing devices and AVDs, starting/stopping emulators, building and running the app, reading logcat, getting crash reports and ANR traces, clearing app data, granting/revoking permissions, toggling network and dark mode, rendering Compose previews.
 2. **mobile-mcp** (UI interaction only) — reading the UI element tree, tapping, swiping, text input, back/home buttons, orientation changes, opening URLs.
 
+Never use `sleep` or manual delays after starting an emulator or launching the app — plugin tools handle boot and launch completion internally. Proceed to the next step immediately after the tool returns.
+
 When implementing or changing Compose UI, use the headless preview renderer to verify layout before running the app on device — it renders all `@Preview` composables in the file instantly without a full build or device run.
 
 Every UI action via mobile-mcp MUST be wrapped with: **`mobile_list_elements_on_screen` → action → `mobile_list_elements_on_screen`**. No blind taps.
