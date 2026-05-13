@@ -2,9 +2,9 @@
 
 Run scenarios on the emulator by visually inspecting the UI and verifying via logcat.
 
-**Rule of thumb:** UI interaction goes through `mobile-mcp`; device management, logs, and system state go through plugin tools.
+**Observation:** use the structured UI element tree (via mobile-mcp) as the primary way to read screen state — it returns element text, resource-ids, and bounds without needing vision. Fall back to a screenshot only when an element is missing from the tree (custom views, WebView, visual glitches). Never use `sleep` or arbitrary delays between observations — if a screen looks unsettled, re-read the element tree.
 
-**Observation:** use `mobile_list_elements_on_screen` (structured UI tree) as the primary way to read screen state — it returns element text, resource-ids, and bounds without needing vision. Fall back to `mobile_take_screenshot` only when an element is missing from the tree (custom views, WebView, visual glitches).
+**For UI / layout regressions:** before reproducing on the emulator, render the relevant `@Preview` composables via the headless preview renderer — it visualizes the layout instantly without a device run and often surfaces layout bugs (clipped text, wrong padding, missing previews) without any QA-loop iterations.
 
 ## Steps
 
@@ -12,25 +12,25 @@ Run scenarios on the emulator by visually inspecting the UI and verifying via lo
 
 2. **Check a device is available.** If none found, follow `references/device-setup.md` to bring up an emulator (or ask the user to attach a physical device), then retry.
 
-3. **Launch the app** via `mobile_launch_app` with the app's package name.
+3. **Launch the app** via `run_android_app` (pass the absolute path to the entry-point file — it builds, installs, and launches in one step). If `run_android_app` is unavailable, use `launch_android_app` followed by `wait_for_android_app_launch` to confirm the process started. Proceed immediately after the tool returns — do not insert `sleep`.
 
-4. **Reset state if needed** — clear app data for the package, then relaunch.
+4. **Reset state if needed** — clear app data for the package via the plugin tool, then relaunch.
 
 5. **For each scenario, follow the closed loop:**
-   1. `mobile_list_elements_on_screen` — read current UI state (elements, texts, resource-ids).
-   2. Action via mobile-mcp:
-      - `mobile_click_on_screen_at_coordinates` (use coords from `mobile_list_elements_on_screen` for a given resource-id / text)
-      - `mobile_swipe_on_screen`
-      - `mobile_type_keys`
-      - `mobile_press_button BACK` / `HOME` / `ENTER`
-   3. `mobile_list_elements_on_screen` — verify UI changed as expected.
-   4. Check logcat for errors — catch silent crashes.
+   1. Read the UI element tree (via mobile-mcp) — capture current elements, texts, resource-ids.
+   2. Act via mobile-mcp using coordinates resolved from the element tree:
+      - tap on element coordinates
+      - swipe
+      - type text
+      - press button (`BACK` / `HOME` / `ENTER`)
+   3. Read the UI element tree again — verify the UI changed as expected.
+   4. Check logcat (via the plugin tool) for errors — catch silent crashes.
    5. Mark: **PASS / FAIL / BUG**.
 
-   If an expected element is not visible in the tree → call `mobile_take_screenshot` to check for custom-drawn UI or visual regressions.
+   If an expected element is not visible in the tree → take a screenshot to check for custom-drawn UI or visual regressions.
 
 6. **Document bugs.** For each bug:
-   - UI element tree of the broken state (copy from `mobile_list_elements_on_screen` output).
+   - UI element tree of the broken state (copy from the element-tree output).
    - Exact steps to reproduce.
    - Expected vs actual behavior.
    - Relevant logcat lines.
@@ -39,16 +39,17 @@ Run scenarios on the emulator by visually inspecting the UI and verifying via lo
 
 - **Happy path** — complete the main flow successfully.
 - **Empty state** — what shows with no data?
-- **Error state** — disable network, then reproduce the flow.
-- **Edge input** — very long text, special characters, empty fields (via `mobile_type_keys`).
-- **Back navigation** — `mobile_press_button BACK` throughout the flow; does it work correctly?
-- **Rotation** — `mobile_set_orientation landscape` / `portrait` — does state persist?
-- **Permissions** — revoke the relevant permission, then try the flow that needs it.
+- **Error state** — disable network (via the plugin tool), then reproduce the flow.
+- **Edge input** — very long text, special characters, empty fields.
+- **Back navigation** — press `BACK` throughout the flow; does it work correctly?
+- **Rotation** — switch orientation between landscape and portrait — does state persist?
+- **Permissions** — revoke the relevant permission via the plugin tool, then try the flow that needs it.
 - **Low memory** — send a trim-memory signal to the app process.
-- **Dark mode** — switch to dark mode, verify theming.
-- **Deep links** — `mobile_open_url "myapp://some/path"`.
+- **Dark mode** — switch to dark mode via the plugin tool, verify theming.
+- **Deep links** — open a `myapp://some/path` URL via mobile-mcp.
 
 ## Notes
 
-- Don't hardcode pixel coordinates: call `mobile_list_elements_on_screen` to resolve the element by resource-id or text, then pass its bounds center to `mobile_click_on_screen_at_coordinates`. This is resilient to screen size and rotation.
-- For text input: first tap the field to focus it, confirm it's focused via `mobile_list_elements_on_screen`, then `mobile_type_keys`.
+- Don't hardcode pixel coordinates: read the UI element tree to resolve the element by resource-id or text, then tap its bounds center. This is resilient to screen size and rotation.
+- For text input: first tap the field to focus it, confirm it's focused via the element tree, then type.
+- Never insert `sleep` between actions — always re-read the element tree to confirm the UI is in the expected state and proceed.

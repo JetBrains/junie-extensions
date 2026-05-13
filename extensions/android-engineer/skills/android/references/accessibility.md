@@ -1,118 +1,22 @@
 # Accessibility
 
-Android accessibility rules for Jetpack Compose and View system. Generic a11y theory is assumed — this covers Android-specific APIs and common mistakes.
+Android-specific accessibility policy. Generic a11y theory and Compose/View-system API surface are assumed knowledge — this file lists only the rules the agent must enforce.
 
-## Compose
+## Rules
 
-### Semantics basics
-
-Every interactive element must have a meaningful label. The compiler won't warn you when it's missing.
-
-```kotlin
-// Wrong — icon button with no label, TalkBack says "Button"
-IconButton(onClick = { }) {
-    Icon(Icons.Default.Favorite, contentDescription = null)
-}
-
-// Correct
-IconButton(onClick = { }) {
-    Icon(Icons.Default.Favorite, contentDescription = "Add to favourites")
-}
-```
-
-```kotlin
-// Wrong — image conveys meaning but has no description
-Image(painter = painterResource(R.drawable.banner), contentDescription = null)
-
-// Correct — or null only when image is purely decorative
-Image(painter = painterResource(R.drawable.banner), contentDescription = "Summer sale banner")
-```
-
-### Merge vs. clear semantics
-
-Use `Modifier.semantics(mergeDescendants = true)` to group related elements into a single focusable node:
-
-```kotlin
-// Single TalkBack focus for the whole card, reads "John Doe, Senior Engineer"
-Row(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-    Text("John Doe")
-    Text("Senior Engineer")
-}
-```
-
-Use `clearAndSetSemantics` when you want to replace all descendant semantics with a single custom description:
-
-```kotlin
-// Replaces "47" and progress bar semantics with one coherent sentence
-LinearProgressIndicator(
-    progress = { 0.47f },
-    modifier = Modifier.clearAndSetSemantics {
-        contentDescription = "Upload progress: 47%"
-    }
-)
-```
-
-### Roles and state
-
-Set the `Role` when a composable acts as a specific control but isn't one natively:
-
-```kotlin
-Row(
-    modifier = Modifier
-        .toggleable(value = checked, onValueChange = onCheckedChange)
-        .semantics { role = Role.Checkbox }
-) { ... }
-```
-
-Expose dynamic state:
-
-```kotlin
-Modifier.semantics {
-    stateDescription = if (isExpanded) "Expanded" else "Collapsed"
-}
-```
-
-### Touch targets
-
-Minimum touch target is **48×48dp**. Compose doesn't enforce this automatically.
-
-```kotlin
-// Small icon — pad it so TalkBack focus area is large enough
-Icon(
-    ...,
-    modifier = Modifier
-        .size(24.dp)
-        .padding(12.dp)   // effective touch target = 48dp
-)
-```
-
-Or use `Modifier.minimumInteractiveComponentSize()` (Compose 1.3+) which applies the 48dp minimum automatically.
-
-### Headings
-
-Mark section headers so TalkBack users can navigate by heading:
-
-```kotlin
-Text(
-    text = "Recent Orders",
-    modifier = Modifier.semantics { heading() }
-)
-```
-
-## View system
-
-- Every `ImageView` and `ImageButton` needs `android:contentDescription` or `tools:ignore="ContentDescription"` (decorative only).
-- Every interactive `View` without visible text needs `android:contentDescription`.
-- `android:importantForAccessibility="no"` for purely decorative views.
-- `android:labelFor` on a `TextView` label pointing to its associated input field.
-- `RecyclerView` items: set `itemView.contentDescription` in `onBindViewHolder` when the row's meaning depends on data.
+- **Every interactive element has a meaningful label.** Icon buttons, image buttons, custom-toggleable rows: `contentDescription` (View) or `Icon(..., contentDescription = "...")` / `Modifier.semantics { contentDescription = "..." }` (Compose). `null` is allowed **only** for purely decorative imagery.
+- **Minimum touch target is 48×48dp.** Pad small icons or apply `Modifier.minimumInteractiveComponentSize()`; in XML use `minWidth` / `minHeight` 48dp or extend hit-rect via `TouchDelegate`.
+- **Group related elements** that read as one unit (avatar + name + subtitle, list rows) using `Modifier.semantics(mergeDescendants = true) {}` — TalkBack focuses the group, not each child.
+- **Use `clearAndSetSemantics`** to replace descendant semantics with a single coherent description (e.g. progress bars).
+- **Set `Role`** when a composable acts as a control it isn't natively (`Role.Checkbox`, `Role.Switch`, `Role.RadioButton`, `Role.Tab`).
+- **Expose dynamic state** via `stateDescription` (expanded/collapsed, selected, loading) — never rely on a visual cue alone.
+- **Mark section headers** with `Modifier.semantics { heading() }` (Compose) or `android:accessibilityHeading="true"` (View) so users can navigate by heading.
+- **`labelFor`** on standalone label `TextView`s pointing to their input field.
+- **Decorative views** must be marked `importantForAccessibility="no"` (or use `tools:ignore="ContentDescription"` when the lint warning is intentional).
+- **RecyclerView rows** whose meaning depends on data must set `itemView.contentDescription` in `onBindViewHolder`.
 
 ## Verification
 
-- Enable TalkBack and navigate through the feature with eyes closed — every element must announce something meaningful.
-- Use the Accessibility Scanner app (Google) to catch missing labels and small touch targets automatically.
-- In Compose: use `onNodeWithContentDescription(...)` in tests to assert labels exist.
-
-```kotlin
-composeTestRule.onNodeWithContentDescription("Add to favourites").assertIsDisplayed()
-```
+- TalkBack pass: navigate the screen with TalkBack on — every element announces something meaningful, no "Button" / "Image" / silent focus.
+- Accessibility Scanner (Google) — run on the screen for missing labels and small touch targets.
+- Compose tests: assert labels exist via `onNodeWithContentDescription("...").assertIsDisplayed()`.

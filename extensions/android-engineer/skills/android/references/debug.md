@@ -13,7 +13,7 @@ Diagnose a crash or unexpected behavior in an Android app using logcat + source 
 
 3. **Read the relevant code.** Open the file from the stacktrace; read ±50 lines around the crash line, plus any classes/functions in the call chain.
 
-4. **Read UI state.** Call `mobile_list_elements_on_screen` to see what is on screen at the moment of the crash. If the element tree is empty or unhelpful, fall back to `mobile_take_screenshot`.
+4. **Read UI state.** Read the UI element tree (via mobile-mcp) to see what is on screen at the moment of the crash. If the element tree is empty or unhelpful, fall back to a screenshot.
 
 5. **Classify the root cause.** Less obvious Android crashes:
    - `IllegalStateException: Can not perform this action after onSaveInstanceState` → fragment transaction after state save.
@@ -28,6 +28,7 @@ Diagnose a crash or unexpected behavior in an Android app using logcat + source 
 ## Notes
 
 - Filter logcat by package name to reduce noise.
-- For ANRs: use the ANR reader tool — it tries `/data/anr/` first, falls back to legacy traces and DropBox.
+- For ANRs: use the ANR reader plugin tool — it tries `/data/anr/` first, falls back to legacy traces and DropBox.
 - Clear logcat before reproducing, then read it fresh after.
-- If you see the crash but can't read logcat output, use the "last crash" reader — it parses logcat for the most recent `FATAL EXCEPTION` block automatically.
+- If you see the crash but can't read logcat output, use the "last crash" reader plugin tool — it parses logcat for the most recent `FATAL EXCEPTION` block automatically.
+- Never insert `sleep` between reproduction steps — re-read the element tree and logcat after each action; tools return when the action is done.

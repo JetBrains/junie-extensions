@@ -58,15 +58,14 @@ Project-level conventions for Android codebases. Junie MUST follow these rules w
 
 ## Device / Emulator Work
 
-Two layers for device interaction, in priority order:
+Three layers for device interaction, in fallback order — use the first that's available:
 
-1. **Plugin tools** (device management, app lifecycle, diagnostics) — listing devices and AVDs, starting/stopping emulators, building and running the app, reading logcat, getting crash reports and ANR traces, clearing app data, granting/revoking permissions, toggling network and dark mode, rendering Compose previews.
-2. **mobile-mcp** (UI interaction only) — reading the UI element tree, tapping, swiping, text input, back/home buttons, orientation changes, opening URLs.
+1. **Plugin tools — first choice** (device management, app lifecycle, diagnostics, system tweaks): listing devices and AVDs, starting/stopping emulators, building and running the app, reading logcat, getting crash reports and ANR traces, clearing app data, granting/revoking permissions, toggling network and dark mode, rendering Compose previews.
+2. **mobile-mcp — UI interaction only**: reading the UI element tree, tapping, swiping, text input, back/home buttons, orientation changes, opening URLs, screenshot fallback.
+3. **ADB shell — last-resort fallback**: only when neither plugin tools nor mobile-mcp expose the operation (older plugin version, MCP unavailable, exotic shell case). See `skills/android/references/adb.md`.
 
-Never use `sleep` or manual delays after starting an emulator or launching the app — plugin tools handle boot and launch completion internally. Proceed to the next step immediately after the tool returns.
+Never use `sleep` or manual delays after starting an emulator, launching an app, reproducing a bug, or running a QA scenario — plugin tools handle boot and launch completion internally, and other tools return when the action is done. Proceed to the next step immediately after the tool returns.
 
 When implementing or changing Compose UI, use the headless preview renderer to verify layout before running the app on device — it renders all `@Preview` composables in the file instantly without a full build or device run.
 
-Every UI action via mobile-mcp MUST be wrapped with: **`mobile_list_elements_on_screen` → action → `mobile_list_elements_on_screen`**. No blind taps.
-
-Use `mobile_take_screenshot` only as a fallback when elements are absent from the tree (custom-drawn views, WebView, games).
+Every UI action MUST be wrapped: **read the UI element tree → action → read the UI element tree**. No blind taps. Use a screenshot only as a fallback when elements are absent from the tree (custom-drawn views, WebView, games).

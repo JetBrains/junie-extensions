@@ -28,4 +28,65 @@ Report: `app/build/reports/tests/test/index.html`.
 - When testing a **ViewModel** in isolation, mocking the Repository is fine — the Repository has its own dedicated test.
 - Use `UnconfinedTestDispatcher` for simple cases, `StandardTestDispatcher` when you need manual control.
 - For Flow, use **Turbine** (`flow.test { ... awaitItem() }`).
-- For UI tests that require visual confirmation, call `mobile_list_elements_on_screen` after the test and assert expected elements are present.
+- For UI tests that require visual confirmation, read the UI element tree after the test and assert expected elements are present.
+
+## Examples
+
+### MainDispatcherRule (required for `viewModelScope` in unit tests)
+
+```kotlin
+class MainDispatcherRule(
+    val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
+) : TestWatcher() {
+    override fun starting(d: Description) { Dispatchers.setMain(dispatcher) }
+    override fun finished(d: Description) { Dispatchers.resetMain() }
+}
+```
+
+### ViewModel test (MockK + Turbine)
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+class UserViewModelTest {
+    @get:Rule val dispatcherRule = MainDispatcherRule()
+
+    @MockK lateinit var repo: UserRepository
+    private lateinit var vm: UserViewModel
+
+    @BeforeEach fun setUp() { vm = UserViewModel(repo) }
+
+    @Test
+    fun `given repo returns user when load then state is Success`() = runTest {
+        val user = User(id = "1", name = "Alice")
+        coEvery { repo.user("1") } returns user
+
+        vm.state.test {
+            assertEquals(UserUiState.Loading, awaitItem())
+            vm.load("1")
+            assertEquals(UserUiState.Success(user), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+}
+```
+
+### Repository test — mock at ApiService/Dao boundary
+
+```kotlin
+class UserRepositoryTest {
+    private val api = mockk<UserApi>()
+    private val dao = mockk<UserDao>()
+    private val repo = UserRepository(api, dao)
+
+    @Test
+    fun `given api throws when getUser then returns cached entity`() = runTest {
+        val cached = UserEntity(id = "1", name = "Alice")
+        coEvery { dao.getUser("1") } returns cached
+        coEvery { api.getUser("1") } throws IOException()
+
+        val result = repo.user("1")
+
+        assertEquals("Alice", result.name)
+    }
+}
+```

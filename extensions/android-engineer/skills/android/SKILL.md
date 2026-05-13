@@ -23,6 +23,8 @@ Senior Android developer workflows. Covers both the **codebase layer** (Kotlin /
 | Manual QA on emulator | `references/qa.md` | Running scenarios on device, visual verification |
 | Device setup / emulator bootstrap | `references/device-setup.md` | No device available, need to bring up an emulator |
 | Mobile MCP usage | `references/mobile-mcp.md` | Reading UI element tree, taps, swipes, text input via mobile-mcp |
+| ADB fallback | `references/adb.md` | Plugin tool / mobile-mcp not available — use raw ADB shell as a last resort |
+| Accessibility | `references/accessibility.md` | Adding or reviewing UI — labels, touch targets, semantics, headings |
 
 ## Google Official Skills
 
@@ -38,25 +40,38 @@ npx android-skills-pack install --target junie --skill <name>
 
 Relevant hints are in each reference file. When a task matches a Google skill, install it only if not already present.
 
+## Tool priority (three-tier fallback chain)
+
+Use the first available layer for any device/app operation:
+
+1. **Plugin tools — first choice.** Device management (list/start/stop emulator, list AVDs), app lifecycle (build/install/launch/clear), diagnostics (logcat, last crash, ANR traces), system tweaks (permissions, network, dark mode), Compose preview rendering. Fastest, structured output, no shell parsing needed.
+2. **mobile-mcp — UI interaction only.** Reading the UI element tree, taps, swipes, text input, back/home, orientation, opening URLs, screenshot fallback. Use it when the action involves interacting with the UI surface.
+3. **ADB shell — last-resort fallback.** Only when neither a plugin tool nor mobile-mcp covers the operation, or when one of them is unavailable. See `references/adb.md`.
+
 ## The core loop
 
 Whenever the agent touches the device, it follows this loop — no blind actions:
 
 ```
-mobile_list_elements_on_screen        → read current UI state (text, ids, bounds)
+read UI element tree (mobile-mcp)        → observe current state (text, ids, bounds)
      ↓
-action (mobile-mcp: mobile_click_on_screen_at_coordinates / mobile_swipe_on_screen / mobile_type_keys)
+action (mobile-mcp: tap / swipe / type / press button)
      ↓
-mobile_list_elements_on_screen        → verify UI changed as expected
+read UI element tree (mobile-mcp)        → verify UI changed as expected
      ↓
-read logcat                           → catch silent crashes
+read logcat (plugin tool)                → catch silent crashes
 ```
 
-Use `mobile_list_elements_on_screen` as the primary observation tool — it returns structured element data (text, resource-id, bounds) that the agent can read directly without vision.
+The element tree is the primary observation channel — it returns structured data (text, resource-id, bounds) that the agent can read directly without vision. A screenshot is a **fallback only**: use it when elements are missing from the tree (custom-drawn views, games, WebView content, visual layout issues).
 
-`mobile_take_screenshot` is a **fallback only**: use it when elements are missing from the tree (custom views, games, WebView content, visual layout issues).
+## Before running on device — verify Compose UI via headless preview
 
-Plugin tools = device management + app lifecycle + diagnostics. mobile-mcp = UI interaction.
+For any UI-touching task (Compose), render `@Preview` composables **before** running on the emulator:
+
+- **`display_android_compose_preview(path)`** — when the file path is known (typical case after editing a file).
+- **`read_android_last_preview`** (no args) — when the file is already open in the editor and the path is not known.
+
+Both return one image per `@Preview` and trigger a build if needed. Only proceed to the emulator after the preview looks right.
 
 ## Key Patterns
 
@@ -115,9 +130,10 @@ When running QA: follow the core loop — observe → act → verify. Delegate l
 
 **MUST DO:**
 - Use Kotlin, Jetpack Compose, MVVM, Coroutines/Flow.
-- Use **plugin tools** for device management (list/start/stop emulator), app lifecycle (run/install/clear), diagnostics (logcat, crashes, ANR), permissions, and system settings.
+- Prefer **plugin tools** for device management, app lifecycle, diagnostics (logcat, crashes, ANR), permissions, and system settings — they are the first-tier choice.
 - Use **mobile-mcp** for UI interaction: element tree, taps, swipes, text input, back/home, orientation, open-url.
-- Wrap every UI action with `mobile_list_elements_on_screen` before and after, plus log check after.
+- Fall back to raw **ADB** shell only when neither tier covers the operation (`references/adb.md`).
+- Wrap every UI action: read element tree → act → read element tree, then check logcat.
 - When unit-testing, mock at the `ApiService` / `Dao` boundary so the Repository logic (cache-first, API fallback, error mapping) is actually exercised. See `references/test.md`.
 - Reuse existing architecture patterns; read 2–3 similar features before adding a new one.
 
