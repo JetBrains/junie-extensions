@@ -36,6 +36,22 @@ Project-specific policy for Compose code. Generic Compose API knowledge (Materia
 - Always pass a stable `key` to `items(list, key = { it.id })` in `LazyColumn` / `LazyRow`.
 - Read theme tokens (`MaterialTheme.colorScheme.*`, `MaterialTheme.typography.*`) — never hardcode dp / sp / colors.
 
+## Previews
+
+Two plugin tools render `@Preview` composables headlessly — no editor or device needed:
+
+- **`display_android_compose_preview(path)`** — use when the file path is known. Pass the absolute path to the Composable file; returns one image per `@Preview`.
+- **`read_android_last_preview`** (no arguments) — use when the file is already open in the editor and the path is not known. Re-renders `@Preview`s in the currently selected file.
+
+Both tools trigger a build and retry once if the project has not been compiled yet.
+
+Use either when:
+- Verifying layout changes before a full device run.
+- Checking that a composable handles all UI states (Loading / Error / Empty / Content).
+- Debugging theme or dimension issues without deploying.
+
+Each result includes a typed failure reason (`BuildFailed`, `InflateFailed`, `RenderFailed`, `NoPreviews`) — rebuild the project or check logcat if you see these.
+
 ## Pitfalls LLMs get wrong
 
 **`remember` without a key when the input changes:**

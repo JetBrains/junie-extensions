@@ -1,12 +1,12 @@
-# ADB Cheat Sheet
+# ADB Fallback Cheat Sheet
 
-ADB (Android Debug Bridge) is used **only for things `mobile-mcp` cannot do**. For device listing, install/uninstall, launch/terminate, taps, swipes, text input, UI element tree, orientation, open-url and app listing — use `mobile-mcp` tools instead (see `mobile-mcp.md`).
+ADB shell commands are a **last-resort fallback**. Use them only when neither plugin tools (device management, app lifecycle, logcat, crash/ANR readers, permissions, network, dark mode, Compose preview) nor mobile-mcp (UI element tree, taps, swipes, type, orientation, open-url, screenshot fallback) are available — for example, on a plugin version that doesn't yet expose a particular operation, or when an MCP server failed to start.
 
 > **IMPORTANT:** `adb logcat` MUST always be invoked with `-d` — without it the command streams forever and hangs the agent session.
 
-## When to reach for ADB
+## When to reach for ADB (fallback only)
 
-Use ADB shell commands only for:
+Reach for ADB shell only when the corresponding plugin tool / MCP tool is not available:
 
 - Reading logs (`logcat`, ANR traces, tombstones, bugreport).
 - Resetting app state without uninstall (`pm clear`).
@@ -16,16 +16,16 @@ Use ADB shell commands only for:
 - Port forwarding (`forward` / `reverse`).
 - Device properties and diagnostics (`getprop`, `dumpsys`, `pidof`).
 
-Everything else → `mobile-mcp` tool.
+If a plugin tool or mobile-mcp tool already covers the operation, prefer it — ADB is the slowest and least-structured option.
 
 ## Multi-device
 
 ```bash
 adb -s <serial> <cmd>               # target a specific device
-adb start-server / kill-server      # restart adb daemon (if mobile-mcp loses connection)
+adb start-server / kill-server      # restart adb daemon (if MCP loses connection)
 ```
 
-(Use `mobile_list_available_devices` to get device serials; pass the serial with `-s` on ADB commands when more than one is attached.)
+When more than one device is attached, always pass `-s <serial>` on ADB commands.
 
 ## Logcat
 
@@ -43,8 +43,6 @@ adb logcat -d -T 1000                                # last 1000 lines
 ```bash
 adb shell pm clear com.example.app                   # wipe app data (keeps APK installed)
 ```
-
-(`mobile-mcp` can uninstall/reinstall via `mobile_uninstall_app` + `mobile_install_app`, but has no `pm clear`.)
 
 ## Runtime permissions
 
@@ -96,6 +94,6 @@ adb bugreport bugreport.zip                          # full system snapshot
 
 ## Tips
 
-- To clear logcat, reproduce, then dump: `adb logcat -c && <action via mobile-mcp> && adb logcat -d *:E | tail -50`.
-- When multiple devices attached, always pass `-s <serial>` on ADB commands.
+- To clear logcat, reproduce, then dump: `adb logcat -c && <reproduce> && adb logcat -d *:E | tail -50`.
+- When multiple devices are attached, always pass `-s <serial>`.
 - If `adb` itself is missing: `brew install --cask android-platform-tools` (macOS) or install via Android Studio → SDK Manager → Platform-Tools.

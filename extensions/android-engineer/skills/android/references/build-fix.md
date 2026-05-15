@@ -62,3 +62,4 @@ Classify and fix Gradle / compile / KSP / KAPT / resource errors.
 - Compose compiler / Kotlin version mismatch → with Kotlin 2.0+ the Compose compiler is bundled and versioned automatically; just update Kotlin. For Kotlin < 2.0: update `compose-compiler` to match the Kotlin version matrix.
 - `Duplicate class` → exclude transitive dep: `exclude(group = "com.foo", module = "bar")`.
 - `Execution failed for task ':app:checkDebugDuplicateClasses'` → run `./gradlew :app:dependencies` and find the double.
+- Crash/missing data in release but not debug → R8 stripped a class. Add a `-keep` rule in `proguard-rules.pro` for any class accessed by reflection, serialization, or name (Retrofit converters, Gson/Moshi adapters, Room entities). Verify `@SerializedName` / `@SerialName` is on all DTO fields.

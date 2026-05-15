@@ -1,39 +1,22 @@
-# Device setup
+# Device Setup
 
 How to get a working Android device (emulator or physical) before running any skill that needs one (`qa.md`, `debug.md`, autonomous QA agent).
 
-## 1. Preflight check
+## Steps
 
-Call **`mobile_list_available_devices`**.
+1. **Check if a device is already connected** — list connected devices and emulators.
+   - Returns a device → proceed with the task.
+   - Returns empty → continue to step 2.
 
-- Returns a device → proceed with the task.
-- Returns empty → continue to step 2.
+2. **List available AVDs** — list configured Android Virtual Devices.
+   - Returns one or more AVDs → start the first one (`start_android_emulator`). The tool returns when boot completes — proceed immediately, do **not** insert `sleep`. Then retry step 1.
+   - Returns empty → continue to step 3.
 
-## 2. Find the `emulator` binary
+3. **Create an AVD** — run `create_android_avd` with just a name (it picks `pixel_7` + latest installed `google_apis` image by default). Then run `start_android_emulator` and retry step 1.
+   - If it fails with a missing system image error → continue to step 4.
 
-Try these in order, stop on the first that works:
+4. **Ask the user.**
 
-1. `emulator -list-avds` — works if `emulator` is in `PATH`.
-2. `$ANDROID_HOME/emulator/emulator -list-avds` — if `$ANDROID_HOME` is set.
-3. `~/Library/Android/sdk/emulator/emulator -list-avds` — macOS default Android Studio path.
-4. `~/Android/Sdk/emulator/emulator -list-avds` — Linux default Android Studio path.
+> The required Android system image is not installed. Please install it via Android Studio → Tools → SDK Manager → SDK Platforms, select the system image, click Apply. Then let me know.
 
-If all four fail (`command not found` / no such file) → go to step 4.
-
-## 3. Launch the first AVD
-
-Take the first line from the `-list-avds` output of step 2 — that's `<avd-name>`. Launch it in the background using the same `emulator` path that worked:
-
-```
-<emulator-path> -avd <avd-name> >/dev/null 2>&1 &
-```
-
-Then retry `mobile_list_available_devices` every few seconds until it returns a device (boot typically takes 30–120 s on first launch).
-
-If `-list-avds` returned empty (no AVD configured) → go to step 4.
-
-## 4. Fallback — ask the user
-
-> Please start an emulator from Android Studio (Device Manager → ▶) or attach a physical device with USB debugging enabled, then let me know.
-
-Do **not** try to install the Android SDK, create AVDs, or download system images autonomously — it's heavy, interactive, and usually fails without human input.
+Do **not** try to download or install Android SDK system images autonomously.

@@ -34,11 +34,13 @@ Step-by-step workflow for adding a new feature or screen to an Android app.
 
 6. **Build & check.** Run `./gradlew assembleDebug`. Fix all compilation errors before continuing.
 
-7. **Verify on emulator.** Launch the app, navigate to the screen, call `mobile_list_elements_on_screen` and confirm the expected elements are present and in the correct state.
+7. **Verify the UI via headless preview (Compose).** Before running on a device, render the relevant `@Preview` composables with the headless preview renderer — it visualizes the layout instantly without building or running on a device. Iterate on the preview until the layout looks correct.
+
+8. **Verify on emulator.** Run `run_android_app` with the absolute path to the entry-point file (e.g. `.../app/src/main/java/com/example/MainActivity.kt`) — it builds, installs, and launches in one step, returning only when the app is running. Do not insert `sleep`. On failure, fall back: `./gradlew assembleDebug` → `install_android_apk` → `launch_android_app` → `wait_for_android_app_launch`. Navigate to the screen, read the UI element tree, and confirm the expected elements are present.
 
 ## Notes
 
 - If unsure about the architecture, read 2–3 existing similar features first — don't guess.
 - Prefer extending existing patterns over introducing new ones.
-- For new libraries: add to `libs.versions.toml` first, reference by alias in `build.gradle.kts`.
+- For new libraries: add to `libs.versions.toml` first, reference by alias in `build.gradle.kts`. If the library uses reflection, serialization, or class-name lookups (Retrofit converters, custom Gson/Moshi adapters, Room entities accessed by name) — check `proguard-rules.pro`: R8 may strip or rename these classes in release builds.
 - For new Hilt bindings: add a `@Module` with `@InstallIn(SingletonComponent::class)` next to related code.
