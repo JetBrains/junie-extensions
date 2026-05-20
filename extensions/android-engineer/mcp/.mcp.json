@@ -1,5 +1,5 @@
 {
-  "mobile-mcp": {
+  "mcpServers": {
     "Mobile MCP": {
       "command": "npx",
       "args": [
