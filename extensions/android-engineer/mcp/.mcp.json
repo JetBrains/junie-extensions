@@ -1,9 +1,11 @@
 {
   "mobile-mcp": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "@mobilenext/mobile-mcp@latest"
-    ]
+    "Mobile MCP": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mobilenext/mobile-mcp@latest"
+      ]
+    }
   }
 }
