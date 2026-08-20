@@ -30,7 +30,7 @@ The most common mistake: generating a Service where an Action fits, or vice vers
 Use **Larastan** (not raw PHPStan) for Laravel-aware type checking:
 
 ```bash
-composer require --dev nunomaduro/larastan
+composer require --dev larastan/larastan
 ```
 
 Target **level 5+** for new projects. On legacy code, baseline existing violations first, then climb:
