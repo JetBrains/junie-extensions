@@ -11,6 +11,24 @@
   },
   "extensions": [
     {
+      "name": "trackly-sms",
+      "source": "./extensions/trackly-sms",
+      "description": "Connect Trackly SMS, check account setup, and prepare text messages for human approval.",
+      "version": "0.3.0",
+      "author": {
+        "name": "Trackly"
+      },
+      "category": "productivity",
+      "homepage": "https://docs.tracklysms.com/agents/overview",
+      "keywords": [
+        "sms",
+        "text-messaging",
+        "notifications",
+        "mcp",
+        "human-approval"
+      ]
+    },
+    {
       "name": "php-engineer",
       "source": "./extensions/php-engineer",
       "description": "PHP 8.x policy & pitfalls: strict types, enums, readonly, match, PHPStan discipline, and security. Catches the traps LLMs miss — type coercion, foreach-by-reference leak, readonly mutation through references, DateTime aliasing, PDO emulation mode.",
