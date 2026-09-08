@@ -172,6 +172,25 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "dotnet-10-best-practices",
+      "source": "./extensions/dotnet-10-best-practices",
+      "description": "C# 14 / .NET 10 migration & best practices — TFM upgrades, ASP.NET Core 10 (Minimal API validation, native OpenAPI 3.1), C# 14 language features (Extension Members, field keyword), performance wins (LINQ, System.Text.Json source gen, sealed-by-default), and third-party library upgrade traps (FluentFTP, Silverback/Kafka).",
+      "version": "1.0.0",
+      "author": {
+        "name": "JetBrains"
+      },
+      "category": "language",
+      "homepage": "https://github.com/JetBrains/junie-extensions/tree/main/extensions/dotnet-10-best-practices",
+      "keywords": [
+        "dotnet",
+        "dotnet10",
+        "csharp",
+        "csharp14",
+        "aspnetcore",
+        "migration"
+      ]
     }
   ]
 }
