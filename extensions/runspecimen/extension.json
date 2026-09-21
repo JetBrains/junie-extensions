@@ -1,0 +1,4 @@
+{
+  "name": "runspecimen",
+  "description": "Guard serious local agent runs with approval, bounds, provenance, and receipts. Human TTY approve only — adapters never approve."
+}

@@ -152,8 +152,7 @@
         "flyway",
         "liquibase"
       ]
-    }
-  ,
+    },
     {
       "name": "android-engineer",
       "source": "./extensions/android-engineer",
@@ -171,6 +170,24 @@
         "mvvm",
         "mobile-mcp",
         "adb"
+      ]
+    },
+    {
+      "name": "runspecimen",
+      "source": "./extensions/runspecimen",
+      "description": "Guard serious local agent runs with approval, bounds, provenance, and receipts. Human TTY approve only — adapters never approve.",
+      "version": "0.2.0-rc.12",
+      "author": {
+        "name": "RunSpecimen Contributors"
+      },
+      "category": "productivity",
+      "homepage": "https://github.com/darashkevich/runspecimen/tree/main/plugins/runspecimen",
+      "keywords": [
+        "safety",
+        "provenance",
+        "local automation",
+        "agent orchestration",
+        "runspecimen"
       ]
     }
   ]
