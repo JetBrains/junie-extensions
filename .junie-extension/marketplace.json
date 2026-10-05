@@ -172,6 +172,24 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "configure-memory",
+      "source": "./extensions/configure-memory",
+      "description": "Bring saved project decisions, preferences, and goals into your next task with Configure.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Configure"
+      },
+      "category": "productivity",
+      "homepage": "https://configure.dev",
+      "keywords": [
+        "memory",
+        "context",
+        "projects",
+        "preferences",
+        "mcp"
+      ]
     }
   ]
 }
