@@ -172,6 +172,27 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "mrscraper",
+      "source": "./extensions/mrscraper",
+      "description": "Web scraping, structured data extraction, and Google search for AI assistants.",
+      "version": "0.1.4",
+      "author": {
+        "name": "MrScraper"
+      },
+      "category": "data",
+      "homepage": "https://docs.mrscraper.com/docs/getting-started/mcp-server",
+      "keywords": [
+        "mrscraper",
+        "web-scraping",
+        "data-extraction",
+        "scraping",
+        "google-search",
+        "serp",
+        "mcp",
+        "research"
+      ]
     }
   ]
 }
