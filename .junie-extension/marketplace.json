@@ -172,6 +172,25 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "dodopayments",
+      "source": "./extensions/dodopayments",
+      "description": "Dodo Payments integration skills (checkout, subscriptions, webhooks, framework adapters, usage and credit billing, license keys, go-live) plus the Dodo Payments API (OAuth) and documentation MCP servers.",
+      "version": "0.6.0",
+      "author": {
+        "name": "Dodo Payments"
+      },
+      "category": "framework",
+      "homepage": "https://github.com/dodopayments/dodo-agent-plugin",
+      "keywords": [
+        "dodopayments",
+        "payments",
+        "billing",
+        "subscriptions",
+        "webhooks",
+        "mcp"
+      ]
     }
   ]
 }
