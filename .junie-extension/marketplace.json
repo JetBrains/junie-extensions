@@ -177,7 +177,7 @@
       "name": "dodopayments",
       "source": "./extensions/dodopayments",
       "description": "Dodo Payments integration skills (checkout, subscriptions, webhooks, framework adapters, usage and credit billing, license keys, go-live) plus the Dodo Payments API (OAuth) and documentation MCP servers.",
-      "version": "0.6.0",
+      "version": "0.6.5",
       "author": {
         "name": "Dodo Payments"
       },
