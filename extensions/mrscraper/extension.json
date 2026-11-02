@@ -1,4 +1,4 @@
 {
   "name": "mrscraper",
-  "description": "Web scraping, structured data extraction, and web search for AI assistants."
+  "description": "Retrieve web pages as HTML, Markdown, or screenshots, search the web, and check account usage with MrScraper's hosted MCP server."
 }

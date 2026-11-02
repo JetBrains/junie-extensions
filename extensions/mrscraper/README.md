@@ -1,20 +1,21 @@
 # mrscraper
 
-Web scraping, structured data extraction, and web search for AI assistants.
+Retrieve web pages as HTML, Markdown, or screenshots, search the web, and check
+account usage with MrScraper's hosted MCP server.
 
-Connect your agent to MrScraper for raw page fetching, managed structured
-extraction, web search, and reusable saved scraper workflows. The
-included skills preserve source responses with a fetch-first workflow before
-adding backend extraction when it is explicitly requested or clearly useful.
+The included skills keep the retrieved page as the source for summaries and
+local extraction, and route query-first tasks through web search before
+retrieving the selected pages.
 
 ## Contents
 
 - `mcp/.mcp.json`: the hosted MrScraper MCP server,
   `https://mcp.mrscraper.com/mcp` (Streamable HTTP, OAuth 2.1). It exposes
-  seven tools: `fetch`, `scrape`, `serp`, `rerun`, `results`, `result`, and
-  `status`.
-- `skills/`: `mrscraper` (connection, routing, saved runs, results, account),
-  `mrscraper-fetch`, `mrscraper-scrape`, and `mrscraper-serp`.
+  three tools: `scraperAPI` (a page as HTML, Markdown, a screenshot, or a
+  combination), `webSearch` (ranked web search results), and `status` (plan
+  and token usage).
+- `skills/`: `mrscraper` (connection, routing, account status, and
+  troubleshooting), `mrscraper-fetch`, and `mrscraper-serp`.
 
 ## Connect
 
@@ -30,12 +31,9 @@ Try: `Fetch https://www.scrapethissite.com/pages/simple/ and summarize the page.
 
 ## Data handling
 
-Fetching, extraction, search, and reruns contact external websites through
-MrScraper. The service receives target URLs and tool inputs, including
-extraction instructions; results return to Junie for your task. Managed general
-and listing extraction sends page content and the extraction prompt to a
-backend language model and saves a reusable scraper configuration; reruns
-create new stored results. Use third-party sources only where you have
+Page retrieval and web search contact external websites through MrScraper. The
+service receives target URLs, search queries, and request options; results
+return to Junie for your task. Use third-party sources only where you have
 authorization and comply with their terms. The extension contains no
 credentials.
 

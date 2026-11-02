@@ -176,8 +176,8 @@
     {
       "name": "mrscraper",
       "source": "./extensions/mrscraper",
-      "description": "Web scraping, structured data extraction, and web search for AI assistants.",
-      "version": "0.1.4",
+      "description": "Retrieve web pages as HTML, Markdown, or screenshots, search the web, and check account usage with MrScraper's hosted MCP server.",
+      "version": "0.3.0",
       "author": {
         "name": "MrScraper"
       },
