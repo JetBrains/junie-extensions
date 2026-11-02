@@ -172,6 +172,27 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "mrscraper",
+      "source": "./extensions/mrscraper",
+      "description": "Retrieve web pages as HTML, Markdown, or screenshots, search the web, and check account usage with MrScraper's hosted MCP server.",
+      "version": "0.3.0",
+      "author": {
+        "name": "MrScraper"
+      },
+      "category": "data",
+      "homepage": "https://docs.mrscraper.com/docs/getting-started/mcp-server",
+      "keywords": [
+        "mrscraper",
+        "web-scraping",
+        "data-extraction",
+        "scraping",
+        "web-search",
+        "serp",
+        "mcp",
+        "research"
+      ]
     }
   ]
 }
