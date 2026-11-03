@@ -5,7 +5,7 @@
     "email": "junie@jetbrains.com"
   },
   "metadata": {
-    "description": "Curated extensions for Junie — the AI coding agent by JetBrains",
+    "description": "Curated extensions for Junie \u2014 the AI coding agent by JetBrains",
     "version": "1.0.0",
     "homepage": "https://www.jetbrains.com/junie/"
   },
@@ -13,7 +13,7 @@
     {
       "name": "php-engineer",
       "source": "./extensions/php-engineer",
-      "description": "PHP 8.x policy & pitfalls: strict types, enums, readonly, match, PHPStan discipline, and security. Catches the traps LLMs miss — type coercion, foreach-by-reference leak, readonly mutation through references, DateTime aliasing, PDO emulation mode.",
+      "description": "PHP 8.x policy & pitfalls: strict types, enums, readonly, match, PHPStan discipline, and security. Catches the traps LLMs miss \u2014 type coercion, foreach-by-reference leak, readonly mutation through references, DateTime aliasing, PDO emulation mode.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -66,7 +66,7 @@
     {
       "name": "java-engineer",
       "source": "./extensions/java-engineer",
-      "description": "Java 21 language features, idioms, and coding standards. Covers records, sealed classes, pattern matching, virtual threads, streams, Optional, generics, exception handling, and naming conventions. Pure Java — no framework-specific content.",
+      "description": "Java 21 language features, idioms, and coding standards. Covers records, sealed classes, pattern matching, virtual threads, streams, Optional, generics, exception handling, and naming conventions. Pure Java \u2014 no framework-specific content.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -83,7 +83,7 @@
     {
       "name": "kotlin-engineer",
       "source": "./extensions/kotlin-engineer",
-      "description": "Kotlin 2.x policy & pitfalls: coroutine-safety, Flow correctness, null-safety, API design, and build setup. Catches the traps LLMs miss by default — CancellationException swallowing, StateFlow leaks, GlobalScope misuse, KSP/kapt conflicts.",
+      "description": "Kotlin 2.x policy & pitfalls: coroutine-safety, Flow correctness, null-safety, API design, and build setup. Catches the traps LLMs miss by default \u2014 CancellationException swallowing, StateFlow leaks, GlobalScope misuse, KSP/kapt conflicts.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -118,7 +118,7 @@
     {
       "name": "spring-boot-engineer",
       "source": "./extensions/spring-boot-engineer",
-      "description": "Spring Boot 4.x expert for Java and Kotlin (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) — also covers Boot 3.x. Handles REST APIs, Spring Data JPA, OAuth2/JWT, WebFlux, event-driven and resilient microservices, testing with Testcontainers and @MockitoBean, plus Boot 3→4 migration traps (Jackson 3 package rename, removed @MockBean, Security DSL without and(), Undertow dropped) and the production pitfalls that bite hardest: @Transactional self-invocation, N+1 queries, Kotlin + JPA plugin setup, blocking calls inside WebFlux.",
+      "description": "Spring Boot 4.x expert for Java and Kotlin (Spring Framework 7, Spring Security 7, Hibernate 7, Jackson 3) \u2014 also covers Boot 3.x. Handles REST APIs, Spring Data JPA, OAuth2/JWT, WebFlux, event-driven and resilient microservices, testing with Testcontainers and @MockitoBean, plus Boot 3\u21924 migration traps (Jackson 3 package rename, removed @MockBean, Security DSL without and(), Undertow dropped) and the production pitfalls that bite hardest: @Transactional self-invocation, N+1 queries, Kotlin + JPA plugin setup, blocking calls inside WebFlux.",
       "version": "1.0.0",
       "author": {
         "name": "JetBrains"
@@ -152,8 +152,7 @@
         "flyway",
         "liquibase"
       ]
-    }
-  ,
+    },
     {
       "name": "android-engineer",
       "source": "./extensions/android-engineer",
@@ -172,6 +171,17 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "totem",
+      "source": "./extensions/totem",
+      "description": "Coordinate agents through durable messages, tasks, Missions and owner-controlled permissions",
+      "version": "0.3.0",
+      "author": {
+        "name": "Totem"
+      },
+      "homepage": "https://totemlayer.com",
+      "category": "productivity"
     }
   ]
 }
