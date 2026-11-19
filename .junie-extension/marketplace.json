@@ -172,6 +172,23 @@
         "mobile-mcp",
         "adb"
       ]
+    },
+    {
+      "name": "fairvalid",
+      "source": "./extensions/fairvalid",
+      "description": "Search for business leads with FairMatch, quote and unlock selected work emails, and verify email addresses in your FairValid workspace.",
+      "version": "1.1.0",
+      "author": {
+        "name": "FairValid"
+      },
+      "category": "productivity",
+      "homepage": "https://fairvalid.com/help/mcp",
+      "keywords": [
+        "fairmatch",
+        "lead-search",
+        "email-verification",
+        "mcp"
+      ]
     }
   ]
 }
