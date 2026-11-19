@@ -177,7 +177,7 @@
       "name": "fairvalid",
       "source": "./extensions/fairvalid",
       "description": "Search for business leads with FairMatch, quote and unlock selected work emails, and verify email addresses in your FairValid workspace.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "FairValid"
       },

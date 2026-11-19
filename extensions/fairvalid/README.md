@@ -1,12 +1,12 @@
 # FairValid
 
-<img src="https://raw.githubusercontent.com/moonlitnayeem/fairvalid-ai/7da2d657a454729839346403a29914b1d1497a57/assets/fairvalid-icon-400.png" width="48" alt="FairValid logo">
+<img src="https://raw.githubusercontent.com/moonlitnayeem/fairvalid-ai/40cac2883dc74f50f7bc8562b380782c4c6a4379/assets/fairvalid-icon-400.png" width="48" alt="FairValid logo">
 
 Use FairMatch to search for business leads, get a credit quote, and unlock selected work emails. For a list you already have, FairValid can verify addresses and return the results from the same workspace.
 
 ## Connect
 
-After installing the extension, open `/mcp`, choose `fairvalid`, and select **Authorize**. Sign in on FairValid and choose the workspace and existing Live API key you want Junie to use. That key determines the available tools and the spending limit.
+After installing the extension, open `/mcp`, choose `fairvalid`, and select **Authorize**. Sign in on FairValid, review the workspace and requested permissions, and choose **Allow connection**. FairValid automatically prepares access to your workspace. Authorized email checks and FairMatch unlocks use available free credits first.
 
 ## Try it
 

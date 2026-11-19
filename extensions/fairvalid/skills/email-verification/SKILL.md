@@ -12,7 +12,8 @@ vary; match the FairValid tool name rather than inventing a client-specific pref
 ## Connection and authorization
 
 - The server is `https://mcp.fairvalid.com/mcp`. OAuth opens sign-in and consent
-  on `https://fairvalid.com`; users select an existing Live API key and workspace.
+  on `https://fairvalid.com`. Ask the user to approve their workspace connection.
+  FairValid sets up access automatically and uses available free credits first.
 - Never request passwords, API keys, OAuth codes, or tokens in chat. Direct API
   keys belong in the client's protected credential configuration, never in tool
   arguments, URLs, generated files, or logs.
@@ -62,8 +63,7 @@ address looks mistyped, explain the issue and ask before checking a replacement.
 
 ## Retry and cancellation
 
-- A timeout or temporary error can occur after admission. Retry only with the
-  same selected API-key identity, same idempotency key, and unchanged input.
+- A timeout or temporary error can occur after admission. Retry only with the same connection identity, same idempotency key, and unchanged input.
   OAuth refresh retains that key identity; reconnecting to a different key does
   not. Changing credentials or making a new key can create another charged run.
 - If the original admission is uncertain and the credential identity or inputs
@@ -77,8 +77,7 @@ address looks mistyped, explain the issue and ask before checking a replacement.
 
 ## Safe demonstrations
 
-Use a separate direct Test-key connection for sandbox demonstrations. OAuth
-currently selects Live keys. Confirm the connection is a Test-key connection
+Use a separate direct Test-key connection for sandbox demonstrations. OAuth uses live workspace data. Confirm the connection is a Test-key connection
 before any sandbox submission. Test only documented fixtures such as
 `deliverable@example.com` and `undeliverable@example.com`; never real customer
 addresses. Sandbox fixtures do not use provider calls or verification credits,

@@ -20,7 +20,8 @@ that operation and explain what is unavailable rather than inventing a request.
   from email-verification `read`, `submit` and `balance`.
 - Existing keys and OAuth grants do not gain lead permissions from installing
   or updating a plugin. Use the native reconnect/consent flow only when the user
-  wants FairMatch, selecting a key with the intended permissions and spending cap.
+  wants FairMatch. The user approves the workspace and requested permissions.
+  FairValid sets up access automatically and uses available free credits first.
   Do not silently create keys, switch workspaces or widen a grant to bypass denial.
 - Tool filters limit visibility, not permissions. If the client deliberately
   hides `fairvalid_unlock_leads`, explain the need for an explicit host-setting
@@ -50,8 +51,7 @@ that operation and explain what is unavailable rather than inventing a request.
 2. Explain the FairMatch rate: **four credits for each newly acquired verified
    work email**. Search matches and accepted batches are not guaranteed billable
    deliveries. Already-owned and unavailable contacts cost zero. Do not promise
-   a work email for every selected lead or an inbox-delivery guarantee. Respect the workspace balance and the selected
-   API key's lifetime cap.
+   a work email for every selected lead or an inbox-delivery guarantee. Respect the workspace balance and the connection’s spending cap.
 3. Obtain explicit confirmation of the selected leads and a numerical **maximum
    credits** before calling `fairvalid_unlock_leads`. A generic request to find
    leads or a previously approved unrelated budget is insufficient. The request's
@@ -78,7 +78,7 @@ that operation and explain what is unavailable rather than inventing a request.
   after the current interaction ends.
 - Use `fairvalid_get_leads` to retrieve only leads owned by the connected workspace.
   Results contain up to 100 contacts per page. Pass `next_cursor` unchanged as
-  `cursor`; it preserves the original query and is bound to the selected key.
+  `cursor`; it preserves the original query and is bound to the original connection identity.
   Batch reads also require the original key identity. Do not invent a missing
   contact or email address.
 - Report observed completion, delivered verified work emails, and settled credit
@@ -98,7 +98,7 @@ hide an uncertain response. If the original identity/input cannot be recovered,
 report the uncertainty and stop automatic resubmission.
 
 Use only documented **synthetic FairMatch fixtures** with a separate direct
-Test-key connection for sandbox acceptance. OAuth currently selects Live keys;
+Test-key connection for sandbox acceptance. OAuth uses live workspace data;
 it is not sandbox mode. Do not invent a synthetic address, use a customer list,
 or unlock real contacts as an installation test. If a fixture or expected result
 has not been supplied by the current documentation, do not claim it was tested.
